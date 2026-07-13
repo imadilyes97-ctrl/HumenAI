@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://humenai.app/sitemap.xml

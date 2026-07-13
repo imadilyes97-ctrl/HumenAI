@@ -277,35 +277,41 @@ ALTER TABLE media_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
-CREATE OR REPLACE FUNCTION auth.current_tenant_id() RETURNS UUID
-LANGUAGE SQL STABLE AS $$
+-- Fonction RLS: utiliser public.get_tenant_id() au lieu de auth.current_tenant_id()
+-- car Supabase ne permet pas de créer des fonctions dans le schéma auth
+CREATE OR REPLACE FUNCTION public.get_tenant_id() RETURNS UUID
+LANGUAGE SQL STABLE
+SECURITY DEFINER
+AS $$
   SELECT COALESCE(
     (current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'tenant_id')::UUID,
     (current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id')::UUID
   );
 $$;
 
-CREATE POLICY tenant_select ON tenants FOR SELECT USING (id = auth.current_tenant_id());
-CREATE POLICY tenant_update ON tenants FOR UPDATE USING (id = auth.current_tenant_id());
-CREATE POLICY settings_select ON tenant_settings FOR SELECT USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY settings_update ON tenant_settings FOR UPDATE USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY channels_select ON channels FOR SELECT USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY channels_insert ON channels FOR INSERT WITH CHECK (tenant_id = auth.current_tenant_id());
-CREATE POLICY channels_update ON channels FOR UPDATE USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY conversations_select ON conversations FOR SELECT USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY conversations_insert ON conversations FOR INSERT WITH CHECK (tenant_id = auth.current_tenant_id());
-CREATE POLICY conversations_update ON conversations FOR UPDATE USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY messages_select ON messages FOR SELECT USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY messages_insert ON messages FOR INSERT WITH CHECK (tenant_id = auth.current_tenant_id());
-CREATE POLICY documents_select ON documents FOR SELECT USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY documents_insert ON documents FOR INSERT WITH CHECK (tenant_id = auth.current_tenant_id());
-CREATE POLICY documents_update ON documents FOR UPDATE USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY chunks_select ON document_chunks FOR SELECT USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY chunks_insert ON document_chunks FOR INSERT WITH CHECK (tenant_id = auth.current_tenant_id());
-CREATE POLICY media_select ON media_assets FOR SELECT USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY media_insert ON media_assets FOR INSERT WITH CHECK (tenant_id = auth.current_tenant_id());
-CREATE POLICY analytics_select ON analytics_events FOR SELECT USING (tenant_id = auth.current_tenant_id());
-CREATE POLICY analytics_insert ON analytics_events FOR INSERT WITH CHECK (tenant_id = auth.current_tenant_id());
-CREATE POLICY audit_select ON audit_logs FOR SELECT USING (tenant_id = auth.current_tenant_id());
+GRANT EXECUTE ON FUNCTION public.get_tenant_id() TO anon, authenticated, service_role;
+
+CREATE POLICY tenant_select ON tenants FOR SELECT USING (id = public.get_tenant_id());
+CREATE POLICY tenant_update ON tenants FOR UPDATE USING (id = public.get_tenant_id());
+CREATE POLICY settings_select ON tenant_settings FOR SELECT USING (tenant_id = public.get_tenant_id());
+CREATE POLICY settings_update ON tenant_settings FOR UPDATE USING (tenant_id = public.get_tenant_id());
+CREATE POLICY channels_select ON channels FOR SELECT USING (tenant_id = public.get_tenant_id());
+CREATE POLICY channels_insert ON channels FOR INSERT WITH CHECK (tenant_id = public.get_tenant_id());
+CREATE POLICY channels_update ON channels FOR UPDATE USING (tenant_id = public.get_tenant_id());
+CREATE POLICY conversations_select ON conversations FOR SELECT USING (tenant_id = public.get_tenant_id());
+CREATE POLICY conversations_insert ON conversations FOR INSERT WITH CHECK (tenant_id = public.get_tenant_id());
+CREATE POLICY conversations_update ON conversations FOR UPDATE USING (tenant_id = public.get_tenant_id());
+CREATE POLICY messages_select ON messages FOR SELECT USING (tenant_id = public.get_tenant_id());
+CREATE POLICY messages_insert ON messages FOR INSERT WITH CHECK (tenant_id = public.get_tenant_id());
+CREATE POLICY documents_select ON documents FOR SELECT USING (tenant_id = public.get_tenant_id());
+CREATE POLICY documents_insert ON documents FOR INSERT WITH CHECK (tenant_id = public.get_tenant_id());
+CREATE POLICY documents_update ON documents FOR UPDATE USING (tenant_id = public.get_tenant_id());
+CREATE POLICY chunks_select ON document_chunks FOR SELECT USING (tenant_id = public.get_tenant_id());
+CREATE POLICY chunks_insert ON document_chunks FOR INSERT WITH CHECK (tenant_id = public.get_tenant_id());
+CREATE POLICY media_select ON media_assets FOR SELECT USING (tenant_id = public.get_tenant_id());
+CREATE POLICY media_insert ON media_assets FOR INSERT WITH CHECK (tenant_id = public.get_tenant_id());
+CREATE POLICY analytics_select ON analytics_events FOR SELECT USING (tenant_id = public.get_tenant_id());
+CREATE POLICY analytics_insert ON analytics_events FOR INSERT WITH CHECK (tenant_id = public.get_tenant_id());
+CREATE POLICY audit_select ON audit_logs FOR SELECT USING (tenant_id = public.get_tenant_id());
 
 COMMIT;

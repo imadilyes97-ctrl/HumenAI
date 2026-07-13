@@ -39,12 +39,12 @@ CREATE TRIGGER model_providers_updated_at
 ALTER TABLE model_providers ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY model_providers_select ON model_providers FOR SELECT
-  USING (tenant_id = auth.current_tenant_id());
+  USING (tenant_id = public.get_tenant_id());
 CREATE POLICY model_providers_insert ON model_providers FOR INSERT
-  WITH CHECK (tenant_id = auth.current_tenant_id());
+  WITH CHECK (tenant_id = public.get_tenant_id());
 CREATE POLICY model_providers_update ON model_providers FOR UPDATE
-  USING (tenant_id = auth.current_tenant_id());
+  USING (tenant_id = public.get_tenant_id());
 CREATE POLICY model_providers_delete ON model_providers FOR DELETE
-  USING (tenant_id = auth.current_tenant_id());
+  USING (tenant_id = public.get_tenant_id());
 
 COMMIT;

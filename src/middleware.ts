@@ -105,13 +105,19 @@ export async function middleware(request: NextRequest) {
   }
 
   // ---------------------------------------------------------------
-  // 4. Routes protégées — vérification session
+  // 4. Routes protégées (dashboard + API) — vérification session
   // ---------------------------------------------------------------
-  if (pathname.startsWith("/dashboard")) {
+  const isApiRoute = pathname.startsWith("/api/");
+  const isDashboardRoute = pathname.startsWith("/dashboard");
+
+  if (isDashboardRoute || isApiRoute) {
     const accessToken = request.cookies.get("humenai-access-token")?.value;
 
-    // Pas de token → redirection vers login
+    // Pas de token
     if (!accessToken) {
+      if (isApiRoute) {
+        return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+      }
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
@@ -121,19 +127,21 @@ export async function middleware(request: NextRequest) {
     const session = await verifySession(accessToken);
 
     if (!session) {
-      // Token invalide ou expiré → supprimer les cookies et rediriger
-      const loginUrl = new URL("/login", request.url);
-      const response = NextResponse.redirect(loginUrl);
+      // Token invalide ou expiré → supprimer les cookies
+      const base = isApiRoute
+        ? NextResponse.json({ error: "Session invalide" }, { status: 401 })
+        : NextResponse.redirect(new URL("/login", request.url));
 
-      response.cookies.delete("humenai-access-token");
-      response.cookies.delete("humenai-refresh-token");
+      base.cookies.delete("humenai-access-token");
+      base.cookies.delete("humenai-refresh-token");
 
-      return response;
+      return base;
     }
 
-    // Session valide → forwarder les infos utilisateur aux routes dashboard
+    // Session valide → forwarder les infos utilisateur aux routes protégées
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set("x-user-id", session.id);
+    requestHeaders.set("Authorization", `Bearer ${accessToken}`);
 
     if (session.tenantId) {
       requestHeaders.set("x-tenant-id", session.tenantId);

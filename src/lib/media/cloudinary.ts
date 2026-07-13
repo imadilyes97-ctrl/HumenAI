@@ -39,9 +39,7 @@ export class CloudinaryManager {
     }
   }
 
-  // Cloudinary ne supporte que "image", "video", "raw", "auto"
   private toResourceType(type: MediaType): "image" | "video" | "raw" | "auto" {
-    if (type === "audio") return "video";
     return type;
   }
 

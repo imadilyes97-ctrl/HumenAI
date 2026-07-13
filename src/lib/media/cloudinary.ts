@@ -39,6 +39,12 @@ export class CloudinaryManager {
     }
   }
 
+  // Cloudinary n'accepte pas "audio" comme resource_type — on le mappe à "video"
+  private toResourceType(type: MediaType): "image" | "video" | "raw" | "auto" {
+    if (type === "audio") return "video";
+    return type;
+  }
+
   init(config: MediaConfig) {
     cloudinary.config({
       cloud_name: config.cloudName,
@@ -73,11 +79,10 @@ export class CloudinaryManager {
     this.initFromEnv();
 
     const uploadOptions: UploadApiOptions = {
-      resource_type: type,
+      resource_type: this.toResourceType(type),
       folder: options.folder || `humenai/${type}`,
       ...(options.transformation && { transformation: options.transformation }),
       ...(options.publicId && { public_id: options.publicId }),
-      // Optimisation auto
       quality: "auto",
       fetch_format: "auto",
     };
@@ -111,7 +116,7 @@ export class CloudinaryManager {
     this.initFromEnv();
 
     const uploadOptions: UploadApiOptions = {
-      resource_type: type,
+      resource_type: this.toResourceType(type),
       folder: options.folder || `humenai/${type}`,
       quality: "auto",
       fetch_format: "auto",
@@ -137,7 +142,7 @@ export class CloudinaryManager {
   async delete(publicId: string, type: MediaType = "image"): Promise<boolean> {
     this.initFromEnv();
     const result = await cloudinary.uploader.destroy(publicId, {
-      resource_type: type === "audio" ? "video" : type, // Cloudinary gère l'audio comme "video"
+      resource_type: this.toResourceType(type),
     });
     return result.result === "ok";
   }

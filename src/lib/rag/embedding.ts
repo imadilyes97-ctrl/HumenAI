@@ -3,6 +3,7 @@
 // Document chunking, embedding generation, and pgvector similarity search
 // ============================================================================
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getSupabaseAdminClient } from "@/lib/supabase/client";
 import type { DocumentSearchResult, ChunkingStrategy } from "@/lib/db/types";
 
@@ -267,7 +268,6 @@ export async function searchDocuments(
   const {
     limit = 5,
     minSimilarity = 0.7,
-    activeOnly = true,
   } = options;
 
   // Generate embedding for the query
@@ -277,8 +277,7 @@ export async function searchDocuments(
   const embeddingStr = `[${queryEmbedding.join(",")}]`;
 
   // Call the SQL function search_tenant_chunks via RPC
-  const rpcName = "search_tenant_chunks" as any;
-  const { data, error } = await supabase.rpc(rpcName, {
+  const { data, error } = await supabase.rpc("search_tenant_chunks" as any, {
     p_tenant_id: tenantId,
     p_embedding: embeddingStr,
     p_match_count: limit,

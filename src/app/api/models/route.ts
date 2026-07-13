@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { modelOrchestrator } from "@/lib/models/orchestrator";
-import type { ProviderConfig, ModelProvider } from "@/lib/models/types";
+import { getSupabaseServerClient } from "@/lib/supabase/client";
+import type { ModelProvider } from "@/lib/models/types";
 
-// Temporary in-memory store (will be replaced by Supabase)
-const modelStore = new Map<string, ProviderConfig[]>();
+// HumenAI — Models API
+// Configuration des fournisseurs de modèles IA par tenant
+
+// model_providers n'est pas encore dans database.types.ts — cast as any
 
 const PROVIDER_LABELS: Record<ModelProvider, string> = {
   openai: "OpenAI",
@@ -33,54 +34,114 @@ const PROVIDER_DEFAULT_MODELS: Record<ModelProvider, string[]> = {
   openrouter: ["openrouter/auto"],
 };
 
-// GET — list configured providers for a tenant
+// GET — liste les providers configurés pour un tenant
 export async function GET(request: NextRequest) {
-  const tenantId = request.headers.get("x-tenant-id") || "default";
-  const providers = modelStore.get(tenantId) || [];
-  return NextResponse.json({ providers });
+  try {
+    const supabase = getSupabaseServerClient(request);
+    const tenantId = request.headers.get("x-tenant-id");
+
+    if (!tenantId) {
+      return NextResponse.json(
+        { error: "En-tête x-tenant-id requis" },
+        { status: 400 }
+      );
+    }
+
+    const { data: providers, error } = await (supabase as any)
+      .from("model_providers")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("priority", { ascending: true });
+
+    if (error) {
+      console.error("Erreur lors de la récupération des providers :", error);
+      return NextResponse.json(
+        { error: "Erreur lors de la récupération des providers" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ providers: providers || [] });
+  } catch (error) {
+    console.error("Erreur serveur models GET :", error);
+    return NextResponse.json(
+      { error: "Erreur interne du serveur" },
+      { status: 500 }
+    );
+  }
 }
 
-// POST — save or update provider config + test connection
+// POST — sauvegarde ou met à jour la configuration d'un provider
 export async function POST(request: NextRequest) {
   try {
-    const tenantId = request.headers.get("x-tenant-id") || "default";
+    const supabase = getSupabaseServerClient(request);
+    const tenantId = request.headers.get("x-tenant-id");
     const body = await request.json();
     const { provider: providerName, apiKey, models, defaultModel, isActive, priority } = body;
 
+    if (!tenantId) {
+      return NextResponse.json(
+        { error: "En-tête x-tenant-id requis" },
+        { status: 400 }
+      );
+    }
+
     if (!providerName || !apiKey) {
-      return NextResponse.json({ error: "Provider et API Key requis" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Provider et API Key requis" },
+        { status: 400 }
+      );
     }
 
     const p = providerName as ModelProvider;
-    const existing = modelStore.get(tenantId) || [];
+    const now = new Date().toISOString();
 
-    // Check if provider already exists → update
-    const existingIndex = existing.findIndex((c) => c.provider === p);
-    const config: ProviderConfig = {
-      id: existing[existingIndex]?.id || `prov_${Date.now()}`,
-      tenantId,
+    // Vérifier si une config existe déjà pour ce tenant + provider
+    const sb = supabase as any;
+    const { data: existing } = await sb
+      .from("model_providers")
+      .select("id, created_at")
+      .eq("tenant_id", tenantId)
+      .eq("provider", p)
+      .maybeSingle();
+
+    const record = {
+      tenant_id: tenantId,
       provider: p,
       label: PROVIDER_LABELS[p] || p,
-      apiKey,
-      models: models || PROVIDER_DEFAULT_MODELS[p] || [PROVIDER_DEFAULT_MODELS[p]?.[0] || "gpt-4o-mini"],
-      capabilities: PROVIDER_CAPABILITIES[p] as any || ["text"],
-      defaultModel: defaultModel || PROVIDER_DEFAULT_MODELS[p]?.[0] || "gpt-4o-mini",
-      isActive: isActive !== undefined ? isActive : true,
-      priority: priority || existing.length + 1,
-      createdAt: existing[existingIndex]?.createdAt || new Date().toISOString(),
+      api_key: apiKey,
+      models: models || PROVIDER_DEFAULT_MODELS[p] || ["gpt-4o-mini"],
+      capabilities: PROVIDER_CAPABILITIES[p] || ["text"],
+      default_model: defaultModel || PROVIDER_DEFAULT_MODELS[p]?.[0] || "gpt-4o-mini",
+      is_active: isActive !== undefined ? isActive : true,
+      priority: priority || 1,
+      updated_at: now,
     };
 
-    if (existingIndex >= 0) {
-      existing[existingIndex] = config;
-    } else {
-      existing.push(config);
+    const { data: provider, error } = existing
+      ? await sb
+          .from("model_providers")
+          .update(record)
+          .eq("id", existing.id)
+          .select()
+          .single()
+      : await sb
+          .from("model_providers")
+          .insert({ ...record, created_at: now })
+          .select()
+          .single();
+
+    if (error) {
+      console.error("Erreur lors de l'enregistrement du provider :", error);
+      return NextResponse.json(
+        { error: "Erreur lors de l'enregistrement du provider" },
+        { status: 500 }
+      );
     }
 
-    modelStore.set(tenantId, existing);
-
     return NextResponse.json({
-      provider: config,
-      message: `${config.label} configuré avec succès !`,
+      provider,
+      message: `${record.label} configuré avec succès !`,
     });
   } catch (error) {
     return NextResponse.json(
@@ -90,21 +151,51 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE — remove a provider config
+// DELETE — supprime la configuration d'un provider
 export async function DELETE(request: NextRequest) {
-  const tenantId = request.headers.get("x-tenant-id") || "default";
-  const id = request.nextUrl.searchParams.get("id");
+  try {
+    const supabase = getSupabaseServerClient(request);
+    const tenantId = request.headers.get("x-tenant-id");
+    const id = request.nextUrl.searchParams.get("id");
 
-  if (!id) {
-    return NextResponse.json({ error: "Provider ID requis" }, { status: 400 });
+    if (!tenantId) {
+      return NextResponse.json(
+        { error: "En-tête x-tenant-id requis" },
+        { status: 400 }
+      );
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID du provider requis" },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await (supabase as any)
+      .from("model_providers")
+      .delete()
+      .eq("id", id)
+      .eq("tenant_id", tenantId);
+
+    if (error) {
+      console.error("Erreur lors de la suppression du provider :", error);
+      return NextResponse.json(
+        { error: "Erreur lors de la suppression du provider" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ message: "Provider supprimé avec succès" });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Erreur inconnue" },
+      { status: 500 }
+    );
   }
-
-  const existing = modelStore.get(tenantId) || [];
-  modelStore.set(tenantId, existing.filter((c) => c.id !== id));
-  return NextResponse.json({ message: "Provider supprimé" });
 }
 
-// GET /api/models/available — list available providers/modes
+// GET /api/models/available — liste les providers/modèles disponibles
 export async function HEAD(request: NextRequest) {
   return NextResponse.json({
     providers: Object.entries(PROVIDER_LABELS).map(([key, label]) => ({

@@ -1,49 +1,128 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSupabaseServerClient } from "@/lib/supabase/client";
 
 // HumenAI — Conversations API
 
 export async function GET(request: NextRequest) {
-  const tenantId = request.headers.get("x-tenant-id");
-  const searchParams = request.nextUrl.searchParams;
-  const _status = searchParams.get("status");
-  const limit = parseInt(searchParams.get("limit") || "50");
-
-  if (!tenantId) {
-    return NextResponse.json({ error: "Tenant ID required" }, { status: 400 });
-  }
-
-  // TODO: Fetch conversations from database with tenant isolation
-  return NextResponse.json({
-    conversations: [],
-    total: 0,
-    limit,
-  });
-}
-
-export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { tenantId, message } = body;
+    const supabase = getSupabaseServerClient(request);
+    const tenantId = request.headers.get("x-tenant-id");
+    const searchParams = request.nextUrl.searchParams;
+    const status = searchParams.get("status");
+    const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
+    const offset = parseInt(searchParams.get("offset") || "0");
 
-    if (!tenantId || !message) {
+    if (!tenantId) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "En-tête x-tenant-id requis" },
         { status: 400 }
       );
     }
 
-    // TODO: Create conversation + initial message
-    // 1. Find or create conversation by tenantId + customerId
-    // 2. Add message to conversation
-    // 3. Process via AI pipeline
-    // 4. Return response
+    let query = supabase
+      .from("conversations")
+      .select("*", { count: "exact" })
+      .eq("tenant_id", tenantId);
+
+    if (status) {
+      query = query.eq("status", status);
+    }
+
+    const { data: conversations, error, count } = await query
+      .order("last_message_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      console.error("Erreur lors de la récupération des conversations :", error);
+      return NextResponse.json(
+        { error: "Erreur lors de la récupération des conversations" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
-      conversationId: `conv_${Date.now()}`,
+      conversations: conversations || [],
+      total: count || 0,
+    });
+  } catch (error) {
+    console.error("Erreur serveur conversations GET :", error);
+    return NextResponse.json(
+      { error: "Erreur interne du serveur" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = getSupabaseServerClient(request);
+    const tenantId = request.headers.get("x-tenant-id");
+    const body = await request.json();
+    const { message, customerId, channelId, channelType, customerName, customerEmail } = body;
+
+    if (!tenantId) {
+      return NextResponse.json(
+        { error: "En-tête x-tenant-id requis" },
+        { status: 400 }
+      );
+    }
+
+    if (!message) {
+      return NextResponse.json(
+        { error: "Champ obligatoire manquant : message" },
+        { status: 400 }
+      );
+    }
+
+    // Créer la conversation
+    const { data: conversation, error: convError } = await supabase
+      .from("conversations")
+      .insert({
+        tenant_id: tenantId,
+        channel_id: channelId || "web_widget",
+        channel_type: channelType || "web_widget",
+        customer_id: customerId || `anonymous_${Date.now()}`,
+        customer_name: customerName || null,
+        customer_email: customerEmail || null,
+        status: "active",
+        last_message_at: new Date().toISOString(),
+        message_count: 1,
+      })
+      .select()
+      .single();
+
+    if (convError) {
+      console.error("Erreur lors de la création de la conversation :", convError);
+      return NextResponse.json(
+        { error: "Erreur lors de la création de la conversation" },
+        { status: 500 }
+      );
+    }
+
+    // Créer le premier message
+    const { error: msgError } = await supabase.from("messages").insert({
+      conversation_id: conversation.id,
+      sender: "customer",
+      content: message,
+    });
+
+    if (msgError) {
+      console.error("Erreur lors de la création du message :", msgError);
+      return NextResponse.json(
+        { error: "Erreur lors de l'enregistrement du message" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      conversationId: conversation.id,
       reply: "Message reçu. Traitement en cours...",
     });
   } catch (error) {
-    console.error("Conversation error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("Erreur serveur conversations POST :", error);
+    return NextResponse.json(
+      { error: "Erreur interne du serveur" },
+      { status: 500 }
+    );
   }
 }

@@ -109,7 +109,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setActiveModal(p.provider)}
+                    onClick={() => setActiveModal(p.id)}
                     className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors ${
                       connected
                         ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"

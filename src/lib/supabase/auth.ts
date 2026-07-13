@@ -150,6 +150,7 @@ export async function signUp({
       email,
       name,
       role: "admin",
+      password_hash: "",
     })
     .select()
     .single();

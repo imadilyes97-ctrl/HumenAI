@@ -176,7 +176,6 @@ export class CloudinaryManager {
     switch (type) {
       case "image": return "image/jpeg";
       case "video": return "video/mp4";
-      case "audio": return "audio/mp3";
     }
   }
 }

@@ -276,14 +276,13 @@ export async function searchDocuments(
   // Format as pgvector string
   const embeddingStr = `[${queryEmbedding.join(",")}]`;
 
-  // Use a raw SQL query for vector similarity search
-  // Supabase-js supports .rpc() for this
-  const { data, error } = await supabase.rpc("search_documents", {
+  // Call the SQL function search_tenant_chunks via RPC
+  const rpcName = "search_tenant_chunks" as any;
+  const { data, error } = await supabase.rpc(rpcName, {
     p_tenant_id: tenantId,
     p_embedding: embeddingStr,
-    p_match_threshold: minSimilarity,
     p_match_count: limit,
-    p_active_only: activeOnly,
+    p_similarity_threshold: minSimilarity,
   });
 
   if (error) {
@@ -291,42 +290,25 @@ export async function searchDocuments(
   }
 
   return (data ?? []).map(
-    (row: {
-      id: string;
-      tenant_id: string;
-      document_group_id: string | null;
-      title: string;
-      content: string;
-      chunk_index: number;
-      total_chunks: number;
-      source_url: string | null;
-      source_type: string;
-      version: number;
-      active: boolean;
-      metadata: Record<string, unknown>;
-      created_at: string;
-      updated_at: string;
-      similarity: number;
-    }) => ({
+    (row: Record<string, unknown>) => ({
       chunk: {
-        id: row.id,
-        tenantId: row.tenant_id,
-        documentGroupId: row.document_group_id,
-        title: row.title,
-        content: row.content,
-        chunkIndex: row.chunk_index,
-        totalChunks: row.total_chunks,
+        id: row.chunk_id as string,
+        tenantId,
+        content: row.content as string,
+        chunkIndex: row.chunk_index as number,
+        title: row.document_title as string || "",
+        totalChunks: 0,
         embedding: null,
-        sourceUrl: row.source_url,
-        sourceType: row.source_type as DocumentSearchResult["chunk"]["sourceType"],
-        version: row.version,
-        active: row.active,
-        metadata: row.metadata as DocumentSearchResult["chunk"]["metadata"],
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
+        sourceUrl: null,
+        sourceType: "manual" as const,
+        version: 1,
+        active: true,
+        metadata: {},
+        createdAt: "",
+        updatedAt: "",
       },
-      similarity: row.similarity,
-      tenantId: row.tenant_id,
+      similarity: row.similarity as number,
+      tenantId,
     })
   );
 }

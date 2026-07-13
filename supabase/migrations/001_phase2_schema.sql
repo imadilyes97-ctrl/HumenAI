@@ -164,7 +164,7 @@ CREATE TABLE document_chunks (
   heading TEXT,
   char_start INT,
   char_end INT,
-  embedding VECTOR(1536),
+  embedding VECTOR(768),
   is_active BOOLEAN NOT NULL DEFAULT true,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -215,7 +215,7 @@ CREATE INDEX idx_audit_tenant ON audit_logs(tenant_id);
 -- RAG function
 CREATE OR REPLACE FUNCTION search_tenant_chunks(
   p_tenant_id UUID,
-  p_embedding VECTOR(1536),
+  p_embedding VECTOR(768),
   p_match_count INT DEFAULT 20,
   p_similarity_threshold FLOAT DEFAULT 0.75
 )

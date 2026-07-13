@@ -9,8 +9,9 @@ import type { DocumentSearchResult, ChunkingStrategy } from "@/lib/db/types";
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
-const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
-const OPENAI_EMBEDDING_DIMENSIONS = 1536;
+const GEMINI_EMBEDDING_MODEL = "text-embedding-004";
+const GEMINI_EMBEDDING_DIMENSIONS = 768;
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_CHUNK_SIZE = 1000;
 const DEFAULT_CHUNK_OVERLAP = 200;
 
@@ -110,81 +111,62 @@ function chunkBySemanticBoundary(
 }
 
 // ---------------------------------------------------------------------------
-// Embedding generation
+// Embedding generation — Gemini text-embedding-004
 // ---------------------------------------------------------------------------
 
 /**
- * Generates an embedding vector for a text string using OpenAI's API.
+ * Generates an embedding vector for a text string using Google Gemini API.
  */
 export async function generateEmbedding(
   text: string
 ): Promise<number[]> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+    throw new Error("GEMINI_API_KEY is not configured. Ajoutez-la dans le Dashboard > Configuration.");
   }
 
   const response = await fetch(
-    "https://api.openai.com/v1/embeddings",
+    `${GEMINI_API_BASE}/models/${GEMINI_EMBEDDING_MODEL}:embedContent?key=${apiKey}`,
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: OPENAI_EMBEDDING_MODEL,
-        input: text,
-        dimensions: OPENAI_EMBEDDING_DIMENSIONS,
+        model: `models/${GEMINI_EMBEDDING_MODEL}`,
+        content: { parts: [{ text }] },
+        outputDimensionality: GEMINI_EMBEDDING_DIMENSIONS,
       }),
     }
   );
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`OpenAI embedding error: ${error}`);
+    throw new Error(`Gemini embedding error: ${error.slice(0, 200)}`);
   }
 
   const data = await response.json();
-  return data.data[0].embedding;
+  return data.embedding.values;
 }
 
 /**
  * Generates embeddings for multiple texts (batch).
+ * Gemini ne supporte pas le vrai batch comme OpenAI,
+ * on parallelise les appels individuels à la place.
  */
 export async function generateEmbeddings(
   texts: string[]
 ): Promise<number[][]> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-
-  const response = await fetch(
-    "https://api.openai.com/v1/embeddings",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: OPENAI_EMBEDDING_MODEL,
-        input: texts,
-        dimensions: OPENAI_EMBEDDING_DIMENSIONS,
-      }),
-    }
+  const results = await Promise.allSettled(
+    texts.map((text) => generateEmbedding(text))
   );
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenAI batch embedding error: ${error}`);
-  }
-
-  const data = await response.json();
-  return data.data
-    .sort((a: { index: number }, b: { index: number }) => a.index - b.index)
-    .map((d: { embedding: number[] }) => d.embedding);
+  return results.map((r, i) => {
+    if (r.status === "rejected") {
+      console.error(`[RAG] Embedding failed for chunk ${i}:`, r.reason);
+      // Retourner un vecteur vide pour ce chunk (sera filtré plus tard)
+      return new Array(GEMINI_EMBEDDING_DIMENSIONS).fill(0);
+    }
+    return r.value;
+  });
 }
 
 // ---------------------------------------------------------------------------

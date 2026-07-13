@@ -81,12 +81,12 @@ export default function HomePage() {
               Un seul assistant, déployé partout où vos clients vous parlent.
             </p>
             <div className="flex flex-wrap justify-center gap-6">
-              {channels.map((c) => (
+              {channels.map((name) => (
                 <div
-                  key={c.name}
+                  key={name}
                   className="px-6 py-3 rounded-full border border-border bg-surface text-sm font-medium"
                 >
-                  {c.name}
+                  {name}
                 </div>
               ))}
             </div>

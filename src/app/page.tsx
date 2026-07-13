@@ -57,7 +57,7 @@ export default function HomePage() {
         <section id="features" className="border-t border-border py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="text-3xl font-bold text-center mb-16">
-              Tout ce qu'il faut pour vendre plus, supporter mieux
+              Tout ce {"qu'"}il faut pour vendre plus, supporter mieux
             </h2>
             <div className="grid md:grid-cols-3 gap-8">
               {features.map((f) => (

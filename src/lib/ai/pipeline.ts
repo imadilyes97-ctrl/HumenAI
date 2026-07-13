@@ -32,7 +32,7 @@ export class AIPipeline {
    * 6. Return processed result
    */
   async process(request: AIRequest): Promise<AIResponse> {
-    const { tenantId, message, conversationHistory, language, channelType } = request;
+    const { tenantId, message, conversationHistory, language } = request;
 
     // Step 1: Load tenant config
     const tenantConfig = await this.loadTenantConfig(tenantId);

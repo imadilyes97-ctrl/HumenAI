@@ -17,7 +17,7 @@ export default function TeamPage() {
 
       <div className="bg-white rounded-xl border border-border">
         <div className="p-6 border-b border-border">
-          <h3 className="font-semibold">Membres de l'équipe</h3>
+          <h3 className="font-semibold">Membres de {"l'"}équipe</h3>
           <p className="text-xs text-text-secondary mt-1">2 membres sur 5 (plan Standard)</p>
         </div>
 

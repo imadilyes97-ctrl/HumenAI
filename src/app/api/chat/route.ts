@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tenantId, message, conversationId, channelType } = body;
+    const { tenantId, message, conversationId } = body;
 
     if (!tenantId || !message) {
       return NextResponse.json(

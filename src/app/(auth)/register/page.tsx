@@ -71,7 +71,7 @@ export default function RegisterPage() {
 
           <p className="text-xs text-text-secondary">
             En créant un compte, vous acceptez nos{" "}
-            <Link href="#" className="text-brand-600 hover:underline">conditions d'utilisation</Link>{" "}
+            <Link href="#" className="text-brand-600 hover:underline">conditions {"d'"}utilisation</Link>{" "}
             et notre{" "}
             <Link href="#" className="text-brand-600 hover:underline">politique de confidentialité</Link>.
           </p>
@@ -107,7 +107,7 @@ function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 
         <div className="space-y-4 text-left">
           <div>
-            <label className="block text-sm font-medium mb-1">Secteur d'activité</label>
+            <label className="block text-sm font-medium mb-1">Secteur {"d'"}activité</label>
             <select className="w-full px-3 py-2 border border-border rounded-lg text-sm">
               <option>Mode & Accessoires</option>
               <option>Électronique</option>

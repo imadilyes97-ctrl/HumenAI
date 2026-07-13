@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
   const tenantId = request.headers.get("x-tenant-id");
   const searchParams = request.nextUrl.searchParams;
-  const status = searchParams.get("status");
+  const _status = searchParams.get("status");
   const limit = parseInt(searchParams.get("limit") || "50");
 
   if (!tenantId) {
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tenantId, channelId, channelType, customerId, message } = body;
+    const { tenantId, message } = body;
 
     if (!tenantId || !message) {
       return NextResponse.json(

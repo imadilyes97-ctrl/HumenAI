@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { signUp } from "@/lib/supabase/auth";
+import type { Database } from "@/lib/supabase/database.types";
 
 // ---------------------------------------------------------------------------
 // Validation Zod
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, email, password, sector } = parsed.data;
+    const { name, email, password, sector, channels } = parsed.data;
 
     // --- Inscription ---
     const result = await signUp({ email, password, name });
@@ -82,6 +83,30 @@ export async function POST(request: NextRequest) {
         .from("tenants")
         .update({ settings: { ...currentSettings, sector } })
         .eq("id", result.tenant.id);
+    }
+
+    // Sauvegarder les canaux choisis pendant l'onboarding
+    if (channels && channels.length > 0 && result.tenant) {
+      const { getSupabaseAdminClient } = await import("@/lib/supabase/client");
+      const admin = getSupabaseAdminClient();
+      const now = new Date().toISOString();
+
+      for (const ch of channels) {
+        const type = ch.toLowerCase().replace(/\s+/g, "_") as Database["public"]["Enums"]["channel_type"];
+        // Ignorer les types qui ne sont pas dans l'enum
+        if (!["whatsapp","instagram","messenger","tiktok","shopify","woocommerce","wix","prestashop","magento","web_widget","email"].includes(type)) continue;
+
+        await admin.from("channels").upsert({
+          tenant_id: result.tenant.id,
+          type,
+          enabled: true,
+          status: "disconnected",
+          credentials: {},
+          settings: {},
+          created_at: now,
+          updated_at: now,
+        });
+      }
     }
 
     // --- Cookie session ---

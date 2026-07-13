@@ -365,6 +365,17 @@ function ChannelModal({
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  const webhookUrl = `https://humen-ai-pi.vercel.app/api/webhooks/${channel.type}`;
+  const [copied, setCopied] = useState(false);
+
+  function copyWebhookUrl() {
+    navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const isMetaChannel = ["whatsapp", "instagram", "messenger"].includes(channel.type);
+
   async function handleConnect(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -428,6 +439,38 @@ function ChannelModal({
         {/* Body */}
         <form onSubmit={handleConnect} className="p-6 space-y-5">
           <p className="text-sm text-text-secondary">{channel.description}</p>
+
+          {isMetaChannel && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-blue-800">🌐 URL du Webhook</h4>
+              <p className="text-xs text-blue-700">
+                Copiez cette URL dans <strong>Meta Developer Portal &gt; Webhooks</strong> :
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono text-blue-900 break-all">
+                  {webhookUrl}
+                </code>
+                <button
+                  type="button"
+                  onClick={copyWebhookUrl}
+                  className="shrink-0 bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
+                >
+                  {copied ? "Copié !" : "Copier"}
+                </button>
+              </div>
+              <div className="bg-white border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                <p className="font-medium mb-1">📋 Étapes pour connecter :</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Créez une app Meta Developer</li>
+                  <li>Ajoutez le produit {channel.name} API</li>
+                  <li>Dans Webhooks, collez l&apos;URL ci-dessus</li>
+                  <li>Entrez le <strong>Verify Token</strong> que vous choisissez ci-dessous</li>
+                  <li>Meta enverra une requête de vérification</li>
+                  <li>Une fois vérifié, sauvegardez ici</li>
+                </ol>
+              </div>
+            </div>
+          )}
 
           {channel.fields.map((field) => (
             <div key={field.name}>

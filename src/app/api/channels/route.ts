@@ -80,11 +80,11 @@ export async function POST(request: NextRequest) {
 
     const channelType = type as Database["public"]["Enums"]["channel_type"];
 
-    // Tester la connexion selon le type de canal
+    // Tester la connexion
     const testResult = await testConnection(type, credentials);
-    const channelStatus: Database["public"]["Enums"]["channel_status"] = testResult.success ? "active" : "error";
+    const channelStatus: Database["public"]["Enums"]["channel_status"] = testResult.success ? "active" : testResult.error === "PENDING" ? "pending" : "error";
 
-    // Vérifier si un canal existe déjà pour ce tenant + type
+    // Vérifier si un canal existe déjà
     const { data: existing } = await supabase
       .from("channels")
       .select("id")
@@ -124,14 +124,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const message = testResult.success
+      ? `${getChannelName(type)} connecté avec succès !`
+      : testResult.error === "PENDING"
+      ? "Configuration sauvegardée. Terminez la configuration dans Meta Developer Portal."
+      : `Erreur de connexion : ${testResult.error}`;
+
     return NextResponse.json({
-      channel: {
-        ...channel,
-        name: getChannelName(channel.type),
-      },
-      message: testResult.success
-        ? `${getChannelName(type)} connecté avec succès !`
-        : `Erreur de connexion : ${testResult.error}`,
+      channel: { ...channel, name: getChannelName(channel.type) },
+      message,
     });
   } catch (error) {
     console.error("Erreur serveur channels POST :", error);
@@ -147,8 +148,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
     const tenantId = request.headers.get("x-tenant-id");
-    const searchParams = request.nextUrl.searchParams;
-    const id = searchParams.get("id");
+    const id = request.nextUrl.searchParams.get("id");
 
     if (!tenantId) {
       return NextResponse.json(
@@ -189,37 +189,41 @@ export async function DELETE(request: NextRequest) {
 }
 
 // Test de connexion selon le type de canal
+// "PENDING" = sauvegardé mais pas encore vérifié par Meta
 async function testConnection(
   type: string,
   creds: Record<string, string>
 ): Promise<{ success: boolean; error?: string }> {
   await new Promise((r) => setTimeout(r, 500));
 
+  // Si seulement le verifyToken est rempli → état pending (Meta pas encore configuré)
+  const hasVerifyToken = !!creds.verifyToken;
+
   switch (type) {
     case "whatsapp": {
-      if (!creds.phoneNumberId)
+      if (!creds.phoneNumberId && !hasVerifyToken)
         return { success: false, error: "Phone Number ID requis" };
-      if (!creds.apiKey)
+      if (!creds.apiKey && !hasVerifyToken)
         return { success: false, error: "API Key requise" };
-      if (creds.apiKey.length < 10)
+      if (creds.apiKey && creds.apiKey.length < 10)
         return { success: false, error: "API Key invalide (trop courte)" };
-      if (!creds.apiKey.startsWith("EAA")) {
-        return {
-          success: false,
-          error: "Le token WhatsApp doit commencer par 'EAA'",
-        };
-      }
+      if (creds.apiKey && !creds.apiKey.startsWith("EAA"))
+        return { success: false, error: "Le token WhatsApp doit commencer par 'EAA'" };
+      if (!creds.apiKey && hasVerifyToken)
+        return { success: false, error: "PENDING" };
       return { success: true };
     }
 
     case "instagram":
     case "messenger": {
-      if (!creds.pageId)
+      if (!creds.pageId && !hasVerifyToken)
         return { success: false, error: "Page ID requis" };
-      if (!creds.accessToken)
+      if (!creds.accessToken && !hasVerifyToken)
         return { success: false, error: "Access Token requis" };
-      if (creds.accessToken.length < 20)
+      if (creds.accessToken && creds.accessToken.length < 20)
         return { success: false, error: "Token invalide (trop court)" };
+      if (!creds.accessToken && hasVerifyToken)
+        return { success: false, error: "PENDING" };
       return { success: true };
     }
 

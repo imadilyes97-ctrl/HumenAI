@@ -89,7 +89,7 @@ export default function SettingsPage() {
         ) : (
           <div className="space-y-3">
             {PROVIDERS.map((p) => {
-              const connected = isProviderConnected(p.provider);
+              const connected = isProviderConnected(p.id);
               return (
                 <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-surface-secondary transition-colors">
                   <div className="flex items-center gap-3">

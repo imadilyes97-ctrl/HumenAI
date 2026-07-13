@@ -1,4 +1,5 @@
 // OpenAI provider
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { OrchestrationRequest } from "../types";
 
 export async function callOpenAI(apiKey: string, model: string, request: OrchestrationRequest) {

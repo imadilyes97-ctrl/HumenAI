@@ -58,7 +58,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold">Configuration</h1>
         <p className="text-sm text-text-secondary mt-1">
-          Gérez l'identité de votre chatbot et les modèles IA utilisés.
+          Gérez {"l'"}identité de votre chatbot et les modèles IA utilisés.
         </p>
       </div>
 
@@ -90,7 +90,6 @@ export default function SettingsPage() {
           <div className="space-y-3">
             {PROVIDERS.map((p) => {
               const connected = isProviderConnected(p.provider);
-              const config = getProviderConfig(p.provider);
               return (
                 <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-surface-secondary transition-colors">
                   <div className="flex items-center gap-3">

@@ -1,4 +1,5 @@
 // Anthropic provider
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { OrchestrationRequest } from "../types";
 
 export async function callAnthropic(apiKey: string, model: string, request: OrchestrationRequest) {

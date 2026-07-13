@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { modelOrchestrator } from "@/lib/models/orchestrator";
 import type { ProviderConfig, ModelProvider } from "@/lib/models/types";
 

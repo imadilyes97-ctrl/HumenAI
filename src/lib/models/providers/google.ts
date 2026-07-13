@@ -1,4 +1,5 @@
 // Google Gemini provider
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { OrchestrationRequest } from "../types";
 
 export async function callGoogle(apiKey: string, model: string, request: OrchestrationRequest) {

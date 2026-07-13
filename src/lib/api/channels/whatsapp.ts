@@ -79,7 +79,7 @@ export class WhatsAppAdapter {
   /**
    * Verify webhook signature from WhatsApp
    */
-  verifySignature(signature: string, body: string): boolean {
+  verifySignature(_signature: string, _body: string): boolean {
     // TODO: Implement HMAC-SHA256 verification
     // const expected = crypto.createHmac('sha256', this.apiKey).update(body).digest('hex');
     // return signature === `sha256=${expected}`;

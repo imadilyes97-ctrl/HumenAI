@@ -60,7 +60,7 @@ export class AIPipeline {
     };
   }
 
-  private async loadTenantConfig(tenantId: string) {
+  private async loadTenantConfig(_tenantId: string) {
     // TODO: Load from database
     return {
       chatbotName: "Assistant Boutique",
@@ -71,7 +71,7 @@ export class AIPipeline {
     };
   }
 
-  private async retrieveKnowledge(tenantId: string, query: string): Promise<string[]> {
+  private async retrieveKnowledge(_tenantId: string, _query: string): Promise<string[]> {
     // TODO: Implement RAG with pgvector
     // 1. Generate embedding for query
     // 2. Search vector DB for similar documents
@@ -98,10 +98,10 @@ Règles :
   }
 
   private async callAI(
-    systemPrompt: string,
-    history: { role: string; content: string }[],
-    message: string,
-    language: string
+    _systemPrompt: string,
+    _history: { role: string; content: string }[],
+    _message: string,
+    _language: string
   ): Promise<string> {
     // TODO: Implement AI provider call
     // - OpenAI: gpt-4o-mini

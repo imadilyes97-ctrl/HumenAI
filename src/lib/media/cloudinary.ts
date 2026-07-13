@@ -4,7 +4,7 @@
 import { v2 as cloudinary, UploadApiResponse, UploadApiOptions } from "cloudinary";
 
 // Types de médias supportés par plan
-export type MediaType = "image" | "video" | "audio";
+export type MediaType = "image" | "video";
 
 export interface MediaConfig {
   cloudName: string;
@@ -39,7 +39,7 @@ export class CloudinaryManager {
     }
   }
 
-  // Cloudinary n'accepte pas "audio" comme resource_type — on le mappe à "video"
+  // Cloudinary ne supporte que "image", "video", "raw", "auto"
   private toResourceType(type: MediaType): "image" | "video" | "raw" | "auto" {
     if (type === "audio") return "video";
     return type;
@@ -165,7 +165,7 @@ export class CloudinaryManager {
   /**
    * Upload de vocal/audio (plan Premium) avec transcription possible
    */
-  async uploadAudio(file: string | Buffer, options: MediaOptions = {}): Promise<UploadResult & { transcription?: string }> {
+  async uploadAudio(file: string | Buffer, options: MediaOptions = {}): Promise<UploadResult> {
     const result = await this.upload(file, "audio", {
       ...options,
       folder: options.folder || "humenai/audio",

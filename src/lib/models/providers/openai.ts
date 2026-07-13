@@ -46,24 +46,15 @@ export async function callOpenAI(apiKey: string, model: string, request: Orchest
   };
 }
 
-function buildContent(request: OrchestrationRequest): string | any[] {
+function buildContent(request: OrchestrationRequest): string {
   if (!request.attachments || request.attachments.length === 0) {
     return request.message;
   }
 
-  const content: any[] = [{ type: "text", text: request.message }];
-
+  let result = request.message;
   for (const att of request.attachments) {
-    if (att.type === "image") {
-      content.push({
-        type: "image_url",
-        image_url: { url: att.url, detail: "auto" },
-      });
-    }
-    if (att.type === "audio") {
-      content.push({ type: "text", text: `[Message vocal disponible à: ${att.url}]` });
-    }
+    if (att.type === "image") result += `\n[Image: ${att.url}]`;
+    if (att.type === "audio") result += `\n[Audio: ${att.url}]`;
   }
-
-  return content;
+  return result;
 }

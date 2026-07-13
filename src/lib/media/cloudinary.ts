@@ -164,7 +164,7 @@ export class CloudinaryManager {
    * Upload de vocal/audio (plan Premium) avec transcription possible
    */
   async uploadAudio(file: string | Buffer, options: MediaOptions = {}): Promise<UploadResult> {
-    const result = await this.upload(file, "audio", {
+    const result = await this.upload(file, "video", {
       ...options,
       folder: options.folder || "humenai/audio",
       transformation: "f_auto",

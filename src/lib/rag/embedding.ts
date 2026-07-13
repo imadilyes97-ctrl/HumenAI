@@ -180,6 +180,7 @@ export interface ProcessDocumentInput {
   content: string;
   sourceUrl?: string | null;
   sourceType?: "manual" | "import" | "web_scrape" | "api" | "integration";
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -233,8 +234,9 @@ export async function processDocument(
     version,
     active: true,
     metadata: {
-      tokenCount: Math.ceil(chunk.length / 4), // approximate
+      tokenCount: Math.ceil(chunk.length / 4),
       originalFileName: input.title,
+      ...(input.metadata ?? {}),
     },
   }));
 

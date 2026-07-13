@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type ProviderName = "openai" | "anthropic" | "google" | "mistral" | "deepseek" | "openrouter";
 
@@ -328,18 +328,7 @@ export default function SettingsPage() {
       </section>
 
       {/* ============ BASE DE CONNAISSANCES ============ */}
-      <section className="bg-white rounded-xl border border-border p-6 space-y-4">
-        <h2 className="font-semibold"> Base de connaissances</h2>
-        <p className="text-sm text-text-secondary">
-          Telechargez vos documents (FAQ, CGV, politique) pour enrichir les reponses.
-        </p>
-        <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-          <p className="text-sm text-text-secondary">
-            Glissez-deposez vos fichiers ici, ou <button className="text-brand-600 hover:underline">parcourez</button>
-          </p>
-          <p className="text-xs text-text-secondary mt-1">PDF, TXT, MD - 10 MB max</p>
-        </div>
-      </section>
+      <KnowledgeBaseSection />
 
       {/* ============ SAVE + FEEDBACK ============ */}
       <div className="flex items-center gap-3">
@@ -510,5 +499,180 @@ function ProviderModal({
         </form>
       </div>
     </div>
+  );
+}
+
+// ============================================================
+// Knowledge Base Section — Upload + List documents
+// ============================================================
+function KnowledgeBaseSection() {
+  const [documents, setDocuments] = useState<Array<{ id: string; title: string; chunkCount: number; sourceType: string; processedAt: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [kbFeedback, setKbFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { loadDocuments(); }, []);
+
+  async function loadDocuments() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/knowledge");
+      if (res.ok) {
+        const data = await res.json();
+        setDocuments(data.documents || []);
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }
+
+  async function handleUploadFile(file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      setKbFeedback({ type: "error", message: "Fichier trop volumineux (max 10 MB)" });
+      setTimeout(() => setKbFeedback(null), 4000);
+      return;
+    }
+
+    setUploading(true);
+    setKbFeedback(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/knowledge", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setKbFeedback({ type: "success", message: data.message || "Document importé !" });
+      } else {
+        setKbFeedback({ type: "error", message: data.error || "Erreur d'import" });
+      }
+      loadDocuments();
+    } catch {
+      setKbFeedback({ type: "error", message: "Erreur réseau" });
+    } finally {
+      setUploading(false);
+      setTimeout(() => setKbFeedback(null), 4000);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Supprimer ce document de la base de connaissances ?")) return;
+    try {
+      const res = await fetch(`/api/knowledge?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setKbFeedback({ type: "success", message: "Document supprimé" });
+        loadDocuments();
+      }
+    } catch { /* silent */ }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleUploadFile(file);
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) handleUploadFile(file);
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-border p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold"> Base de connaissances</h2>
+          <p className="text-sm text-text-secondary">
+            Les documents importés enrichissent les réponses de votre chatbot (RAG).
+          </p>
+        </div>
+      </div>
+
+      {/* Zone drop */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+          dragOver ? "border-brand-500 bg-brand-50" : "border-border hover:border-brand-300"
+        } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.txt,.md,.csv,.json,.html"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        {uploading ? (
+          <div className="flex items-center justify-center gap-2">
+            <span className="animate-spin text-brand-600">⏳</span>
+            <p className="text-sm text-text-secondary">Import en cours...</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-text-secondary">
+              <span className="text-brand-600 font-medium">Cliquez</span> ou glissez-deposez vos fichiers ici
+            </p>
+            <p className="text-xs text-text-secondary mt-1">PDF, TXT, MD, CSV, JSON - 10 MB max</p>
+          </>
+        )}
+      </div>
+
+      {/* Feedback */}
+      {kbFeedback && (
+        <div className={`p-3 rounded-xl text-sm ${
+          kbFeedback.type === "success" ? "bg-green-50 text-green-700 border border-green-200"
+          : "bg-red-50 text-red-700 border border-red-200"
+        }`}>
+          {kbFeedback.message}
+        </div>
+      )}
+
+      {/* Liste */}
+      {loading ? (
+        <p className="text-sm text-text-secondary">Chargement...</p>
+      ) : documents.length === 0 ? (
+        <div className="text-center py-6">
+          <p className="text-3xl mb-2">📄</p>
+          <p className="text-sm text-text-secondary">Aucun document importé</p>
+          <p className="text-xs text-text-secondary mt-1">Importez vos FAQ, CGV ou catalogue pour améliorer les réponses.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">
+            {documents.length} document{documents.length > 1 ? "s" : ""}
+          </p>
+          {documents.map((doc) => (
+            <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-surface-secondary">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-lg shrink-0">📄</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{doc.title}</p>
+                  <p className="text-xs text-text-secondary">
+                    {doc.chunkCount} chunk{doc.chunkCount > 1 ? "s" : ""} · {new Date(doc.processedAt).toLocaleDateString("fr-FR")}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleDelete(doc.id)}
+                className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors shrink-0"
+                title="Supprimer"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

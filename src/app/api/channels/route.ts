@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/supabase/database.types";
 
 // HumenAI — Channels API
 // Sauvegarde et connecte les canaux (WhatsApp, Instagram, Messenger, TikTok, etc.)
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       .eq("tenant_id", tenantId);
 
     if (type) {
-      query = query.eq("type", type);
+      query = query.eq("type", type as Database["public"]["Enums"]["channel_type"]);
     }
 
     const { data: channels, error } = await query.order("created_at", {
@@ -77,22 +78,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const channelType = type as Database["public"]["Enums"]["channel_type"];
+
     // Tester la connexion selon le type de canal
     const testResult = await testConnection(type, credentials);
-    const channelStatus = testResult.success ? "active" : "error";
+    const channelStatus: Database["public"]["Enums"]["channel_status"] = testResult.success ? "active" : "error";
 
     // Vérifier si un canal existe déjà pour ce tenant + type
     const { data: existing } = await supabase
       .from("channels")
       .select("id")
       .eq("tenant_id", tenantId)
-      .eq("type", type)
+      .eq("type", channelType)
       .maybeSingle();
 
     const now = new Date().toISOString();
     const channelData = {
       tenant_id: tenantId,
-      type,
+      type: channelType,
       credentials,
       settings: settings || {},
       status: channelStatus,

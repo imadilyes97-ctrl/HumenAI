@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/supabase/database.types";
 
 // HumenAI — Conversations API
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       .eq("tenant_id", tenantId);
 
     if (status) {
-      query = query.eq("status", status);
+      query = query.eq("status", status as Database["public"]["Enums"]["conversation_status"]);
     }
 
     const { data: conversations, error, count } = await query
@@ -79,12 +80,12 @@ export async function POST(request: NextRequest) {
       .from("conversations")
       .insert({
         tenant_id: tenantId,
-        channel_id: channelId || "web_widget",
-        channel_type: channelType || "web_widget",
+        channel_id: null as unknown as string,
+        channel_type: (channelType || "web_widget") as Database["public"]["Enums"]["channel_type"],
         customer_id: customerId || `anonymous_${Date.now()}`,
         customer_name: customerName || null,
         customer_email: customerEmail || null,
-        status: "active",
+        status: "active" as Database["public"]["Enums"]["conversation_status"],
         last_message_at: new Date().toISOString(),
         message_count: 1,
       })
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
 
     // Créer le premier message
     const { error: msgError } = await supabase.from("messages").insert({
+      tenant_id: tenantId,
       conversation_id: conversation.id,
       sender: "customer",
       content: message,

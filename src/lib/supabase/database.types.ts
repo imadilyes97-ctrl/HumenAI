@@ -273,6 +273,64 @@ export type Database = {
           }
         ];
       };
+      model_providers: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          provider: string;
+          label: string;
+          api_key: string;
+          models: string[];
+          capabilities: string[];
+          default_model: string;
+          is_active: boolean;
+          priority: number;
+          last_used_at: string | null;
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          provider: string;
+          label: string;
+          api_key: string;
+          models?: string[];
+          capabilities?: string[];
+          default_model: string;
+          is_active?: boolean;
+          priority?: number;
+          last_used_at?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          provider?: string;
+          label?: string;
+          api_key?: string;
+          models?: string[];
+          capabilities?: string[];
+          default_model?: string;
+          is_active?: boolean;
+          priority?: number;
+          last_used_at?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "model_providers_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       documents: {
         Row: {
           id: string;
@@ -545,33 +603,45 @@ export type Database = {
         Row: {
           id: string;
           conversation_id: string;
+          tenant_id: string;
           sender: Database["public"]["Enums"]["message_sender"];
           format: Database["public"]["Enums"]["message_format"];
           content: string;
-          agent_id: string | null;
-          media_asset_id: string | null;
+          media_url: string | null;
+          tokens_prompt: number | null;
+          tokens_completion: number | null;
+          latency_ms: number | null;
+          sources: Json | null;
           metadata: Json;
           created_at: string;
         };
         Insert: {
           id?: string;
           conversation_id: string;
+          tenant_id: string;
           sender: Database["public"]["Enums"]["message_sender"];
           format?: Database["public"]["Enums"]["message_format"];
           content: string;
-          agent_id?: string | null;
-          media_asset_id?: string | null;
+          media_url?: string | null;
+          tokens_prompt?: number | null;
+          tokens_completion?: number | null;
+          latency_ms?: number | null;
+          sources?: Json | null;
           metadata?: Json;
           created_at?: string;
         };
         Update: {
           id?: string;
           conversation_id?: string;
+          tenant_id?: string;
           sender?: Database["public"]["Enums"]["message_sender"];
           format?: Database["public"]["Enums"]["message_format"];
           content?: string;
-          agent_id?: string | null;
-          media_asset_id?: string | null;
+          media_url?: string | null;
+          tokens_prompt?: number | null;
+          tokens_completion?: number | null;
+          latency_ms?: number | null;
+          sources?: Json | null;
           metadata?: Json;
           created_at?: string;
         };
@@ -583,15 +653,9 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "messages_agent_id_fkey";
-            columns: ["agent_id"];
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "messages_media_asset_id_fkey";
-            columns: ["media_asset_id"];
-            referencedRelation: "media_assets";
+            foreignKeyName: "messages_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
             referencedColumns: ["id"];
           }
         ];

@@ -5,8 +5,6 @@ import type { ModelProvider } from "@/lib/models/types";
 // HumenAI — Models API
 // Configuration des fournisseurs de modèles IA par tenant
 
-// model_providers n'est pas encore dans database.types.ts — cast as any
-
 const PROVIDER_LABELS: Record<ModelProvider, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
@@ -47,7 +45,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data: providers, error } = await (supabase as any)
+    const { data: providers, error } = await supabase
       .from("model_providers")
       .select("*")
       .eq("tenant_id", tenantId)
@@ -97,8 +95,7 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
 
     // Vérifier si une config existe déjà pour ce tenant + provider
-    const sb = supabase as any;
-    const { data: existing } = await sb
+    const { data: existing } = await supabase
       .from("model_providers")
       .select("id, created_at")
       .eq("tenant_id", tenantId)
@@ -119,13 +116,13 @@ export async function POST(request: NextRequest) {
     };
 
     const { data: provider, error } = existing
-      ? await sb
+      ? await supabase
           .from("model_providers")
           .update(record)
           .eq("id", existing.id)
           .select()
           .single()
-      : await sb
+      : await supabase
           .from("model_providers")
           .insert({ ...record, created_at: now })
           .select()
@@ -172,7 +169,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("model_providers")
       .delete()
       .eq("id", id)

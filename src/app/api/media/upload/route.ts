@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cloudinaryManager } from "@/lib/media/cloudinary";
 import { getSupabaseAdminClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/supabase/database.types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,9 +18,10 @@ export async function POST(request: NextRequest) {
 
     if (tenantId) {
       const supabase = getSupabaseAdminClient();
+      const assetType = type as Database["public"]["Enums"]["media_asset_type"];
       await supabase.from("media_assets").insert({
         tenant_id: tenantId,
-        type,
+        asset_type: assetType,
         format: result.format,
         url: result.url,
         secure_url: result.secureUrl,

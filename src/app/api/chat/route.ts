@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
 import { modelOrchestrator } from "@/lib/models/orchestrator";
-import type { OrchestrationRequest, ProviderConfig } from "@/lib/models/types";
+import type { OrchestrationRequest, ProviderConfig, ModelProvider, ModelCapability } from "@/lib/models/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
 
     // 3. Build system prompt
     const chatbotName = settings?.chatbot_name || "Assistant";
-    const brandTone = settings?.brand_tone || "friendly";
-    const fallbackMsg = settings?.fallback_message || "Je suis désolé, je ne peux pas répondre à cette question.";
+    const brandTone = settings?.tone || "friendly";
+    const fallbackMsg = settings?.offline_message || "Je suis désolé, je ne peux pas répondre à cette question.";
     const systemPrompt = `Tu es ${chatbotName}, un assistant e-commerce ${brandTone === "professional" ? "professionnel" : brandTone === "humorous" ? "humoristique" : "amical"}.
 
 Règles:
@@ -49,16 +49,16 @@ Règles:
     const providerConfigs = providers.map(p => ({
       id: p.id,
       tenantId: p.tenant_id,
-      provider: p.provider,
+      provider: p.provider as ModelProvider,
       label: p.label,
       apiKey: p.api_key,
       models: p.models,
-      capabilities: p.capabilities,
+      capabilities: p.capabilities as ModelCapability[],
       defaultModel: p.default_model,
       isActive: p.is_active,
       priority: p.priority,
       createdAt: p.created_at,
-    }));
+    } satisfies Partial<ProviderConfig>));
 
     // 6. Call orchestrator
     const result = await modelOrchestrator.orchestrate(

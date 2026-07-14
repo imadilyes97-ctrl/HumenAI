@@ -29,7 +29,7 @@ const RegisterBodySchema = z.object({
   channels: z.array(z.string().max(50)).max(20).optional(),
 });
 
-type RegisterBody = z.infer<typeof RegisterBodySchema>;
+// type RegisterBody = z.infer<typeof RegisterBodySchema>;
 
 // ---------------------------------------------------------------------------
 // Cookie helpers

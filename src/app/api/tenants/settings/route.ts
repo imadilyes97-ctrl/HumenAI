@@ -21,7 +21,7 @@ export async function PUT(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     return NextResponse.json({ message: "Paramètres enregistrés" });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }

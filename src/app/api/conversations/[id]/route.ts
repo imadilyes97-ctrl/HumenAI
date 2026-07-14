@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/client";
 import { getApiTenantId } from "@/lib/api-utils";
+import type { Database } from "@/lib/supabase/database.types";
 
 // GET /api/conversations/[id] — Récupère les messages d'une conversation
 export async function GET(
@@ -194,12 +195,10 @@ export async function PATCH(
     }
 
     return NextResponse.json({ message: "Statut mis à jour" });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
-
-import type { Database } from "@/lib/supabase/database.types";
 
 function getChannelName(type: string): string {
   const names: Record<string, string> = {

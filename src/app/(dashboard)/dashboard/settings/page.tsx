@@ -203,9 +203,11 @@ export default function SettingsPage() {
     }
   }
 
+  /* unused - can be restored when UI indicator needed
   function isProviderConnected(provider: ProviderName): boolean {
     return configs.some((c) => c.provider === provider && c.isActive);
   }
+  */
 
   function getProviderConfig(provider: ProviderName): ProviderConfig | undefined {
     return configs.find((c) => c.provider === provider);

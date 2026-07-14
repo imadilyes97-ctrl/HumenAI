@@ -180,7 +180,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 // GET /api/models/available — liste les providers/modèles disponibles
-export async function HEAD(request: NextRequest) {
+export async function HEAD(_request: NextRequest) {
   return NextResponse.json({
     providers: Object.entries(PROVIDER_LABELS).map(([key, label]) => ({
       provider: key,

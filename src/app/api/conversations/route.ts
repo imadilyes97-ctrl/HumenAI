@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
     const body = await request.json();
-    const { message, customerId, channelId, channelType, customerName, customerEmail } = body;
+    const { message, customerId, channelType, customerName, customerEmail } = body;
 
     if (!tenantId) {
       return NextResponse.json(

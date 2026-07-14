@@ -196,6 +196,29 @@ Règles:
         })
         .eq("id", convId);
 
+      // 12. Détection d'escalade — le client demande-t-il un humain ?
+      const escalationKeywords = [
+        "parler à un humain", "parler à un conseiller", "opérateur", "humain",
+        "je veux un conseiller", "agent humain", "vrai personne",
+        "parler à quelqu'un", "je veux parler à", "transférez",
+        "parler à un vrai", "support humain", "service client humain",
+        "réclamation", "agacé", "énervé", "frustré", "déçu", "insatisfait",
+      ];
+
+      const lowerMsg = messageText.toLowerCase();
+      const needsHuman = escalationKeywords.some((kw) => lowerMsg.includes(kw));
+
+      if (needsHuman) {
+        await supabase
+          .from("conversations")
+          .update({
+            status: "waiting_human" as Database["public"]["Enums"]["conversation_status"],
+            metadata: { source: "webhook", escalated_at: new Date().toISOString(), escalation_reason: "client_request" },
+          })
+          .eq("id", convId);
+        console.log(`[webhooks/${channel}] 🆘 Escalade déclenchée pour ${convId}`);
+      }
+
       console.log(`[webhooks/${channel}] ✅ Réponse envoyée (${result.provider}/${result.model}) — send=${sendResult.success ? "OK" : sendResult.error?.slice(0, 60)}`);
     } else {
       // Pas de provider IA configuré → message générique

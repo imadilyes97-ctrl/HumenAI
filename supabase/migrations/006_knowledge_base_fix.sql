@@ -49,6 +49,11 @@ CREATE POLICY documents_update ON documents FOR UPDATE
 CREATE POLICY documents_delete ON documents FOR DELETE
   USING (tenant_id = public.get_tenant_id());
 
+-- Drop ALL overloads of search_tenant_chunks (il peut y en avoir jusqu'à 3)
+DROP FUNCTION IF EXISTS search_tenant_chunks(UUID, VECTOR(1536), INT, FLOAT);
+DROP FUNCTION IF EXISTS search_tenant_chunks(UUID, VECTOR(768), INT, FLOAT);
+DROP FUNCTION IF EXISTS search_tenant_chunks(UUID, TEXT, INT, FLOAT);
+
 -- Search function for tenant chunks
 CREATE OR REPLACE FUNCTION search_tenant_chunks(
   p_tenant_id UUID,

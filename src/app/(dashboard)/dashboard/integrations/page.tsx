@@ -343,6 +343,7 @@ export default function IntegrationsPage() {
         <ChannelModal
           channel={CHANNEL_TYPES.find((c) => c.type === activeModal)!}
           saved={getStatus(activeModal)}
+          tenantSlug={tenantSlug}
           onClose={() => setActiveModal(null)}
           onSaved={() => {
             setActiveModal(null);
@@ -385,11 +386,13 @@ function StatusBadge({ status, error }: { status: string; error?: string }) {
 function ChannelModal({
   channel,
   saved,
+  tenantSlug,
   onClose,
   onSaved,
 }: {
   channel: ChannelInfo;
   saved?: SavedChannel;
+  tenantSlug: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -398,7 +401,7 @@ function ChannelModal({
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [savedVerifyToken, setSavedVerifyToken] = useState<string | null>(null);
 
-  const webhookUrl = `https://humen-ai-pi.vercel.app/api/webhooks/${channel.type}`;
+  const webhookUrl = `https://humen-ai-pi.vercel.app/api/webhooks/${channel.type}/${tenantSlug}`;
   const [copied, setCopied] = useState(""); // "" | "url" | "token"
 
   function copyToClipboard(text: string, key: string) {

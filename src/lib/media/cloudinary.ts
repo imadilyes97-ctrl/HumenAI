@@ -172,6 +172,55 @@ export class CloudinaryManager {
     return result;
   }
 
+  /**
+   * Recherche des images de produits dans Cloudinary par tag ou dossier
+   */
+  async searchProducts(query: string, maxResults: number = 5): Promise<{ url: string; publicId: string; tags?: string[] }[]> {
+    this.initFromEnv();
+    try {
+      // Search by tag or folder name
+      const result = await cloudinary.search
+        .expression(`folder:humenai/products/* AND (tags:${query.replace(/\s+/g, "_")} OR filename:${query.replace(/\s+/g, "_")})`)
+        .max_results(maxResults)
+        .execute();
+      return (result.resources || []).map((r: Record<string, unknown>) => ({
+        url: r.secure_url as string,
+        publicId: r.public_id as string,
+        tags: r.tags as string[],
+      }));
+    } catch {
+      // Fallback: search by folder
+      try {
+        const result = await cloudinary.search
+          .expression(`folder:humenai/products/${query.replace(/\s+/g, "_")}*`)
+          .max_results(maxResults)
+          .execute();
+        return (result.resources || []).map((r: Record<string, unknown>) => ({
+          url: r.secure_url as string,
+          publicId: r.public_id as string,
+          tags: r.tags as string[],
+        }));
+      } catch {
+        return [];
+      }
+    }
+  }
+
+  /**
+   * Upload une image de produit avec tags pour recherche future
+   */
+  async uploadProductImage(
+    file: string | Buffer,
+    productName: string,
+    tags: string[] = []
+  ): Promise<UploadResult> {
+    return this.upload(file, "image", {
+      folder: "humenai/products",
+      transformation: "f_auto,q_auto",
+      publicId: `product_${Date.now()}`,
+    });
+  }
+
   private getMime(type: MediaType): string {
     switch (type) {
       case "image": return "image/jpeg";

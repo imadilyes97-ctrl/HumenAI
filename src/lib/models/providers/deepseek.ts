@@ -1,4 +1,4 @@
-// DeepSeek provider (text-only)
+// DeepSeek provider via OpenCode.ai (Zen API)
 import type { OrchestrationRequest } from "../types";
 
 export async function callDeepSeek(apiKey: string, model: string, request: OrchestrationRequest) {
@@ -11,7 +11,7 @@ export async function callDeepSeek(apiKey: string, model: string, request: Orche
     { role: "user", content: request.message },
   ];
 
-  const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+  const res = await fetch("https://opencode.ai/zen/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -27,8 +27,11 @@ export async function callDeepSeek(apiKey: string, model: string, request: Orche
   }
 
   const data = await res.json();
+  const choice = data.choices?.[0]?.message;
+
   return {
-    reply: data.choices[0].message.content,
+    // Certains modèles retournent le texte dans reasoning_content
+    reply: choice?.content?.trim() || choice?.reasoning_content?.trim() || "Aucune réponse générée.",
     provider: "deepseek" as const,
     model,
     tokensUsed: {

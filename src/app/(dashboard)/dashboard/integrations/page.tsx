@@ -199,7 +199,7 @@ export default function IntegrationsPage() {
   const [savedChannels, setSavedChannels] = useState<SavedChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [tenantSlug, setTenantSlug] = useState<string>("demo");
+  const [tenantSlug, setTenantSlug] = useState<string>("merium");
   const [copiedEmbed, setCopiedEmbed] = useState(false);
 
   // Charger les canaux sauvegardés

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/client";
 import { getApiTenantId } from "@/lib/api-utils";
 import type { Database } from "@/lib/supabase/database.types";
+import crypto from "node:crypto";
 
 // HumenAI — Channels API
 // Sauvegarde et connecte les canaux (WhatsApp, Instagram, Messenger, TikTok, etc.)
@@ -81,6 +82,12 @@ export async function POST(request: NextRequest) {
 
     const channelType = type as Database["public"]["Enums"]["channel_type"];
 
+    // Auto-générer un verifyToken pour Messenger/Instagram si pas fourni
+    // (nécessaire pour la validation du webhook par Meta)
+    if ((type === "messenger" || type === "instagram") && !credentials.verifyToken) {
+      credentials.verifyToken = crypto.randomUUID();
+    }
+
     // Tester la connexion
     const testResult = await testConnection(type, credentials);
     const channelStatus: Database["public"]["Enums"]["channel_status"] = testResult.success ? "active" : testResult.error === "PENDING" ? "pending" : "error";
@@ -125,14 +132,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Inclure le verifyToken dans la réponse (utile pour Messenger/Instagram auto-généré)
+    const savedCredentials = credentials as Record<string, string>;
+    const verifyToken = savedCredentials.verifyToken || null;
+
     const message = testResult.success
-      ? `${getChannelName(type)} connecté avec succès !`
+      ? verifyToken
+        ? `${getChannelName(type)} prêt ! Copiez le Verify Token ci-dessous dans Meta Developer Portal.`
+        : `${getChannelName(type)} connecté avec succès !`
       : testResult.error === "PENDING"
       ? "Configuration sauvegardée. Terminez la configuration dans Meta Developer Portal."
       : `Erreur de connexion : ${testResult.error}`;
 
     return NextResponse.json({
       channel: { ...channel, name: getChannelName(channel.type) },
+      verifyToken,
       message,
     });
   } catch (error) {

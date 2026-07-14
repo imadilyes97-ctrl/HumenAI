@@ -396,14 +396,15 @@ function ChannelModal({
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [savedVerifyToken, setSavedVerifyToken] = useState<string | null>(null);
 
   const webhookUrl = `https://humen-ai-pi.vercel.app/api/webhooks/${channel.type}`;
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(""); // "" | "url" | "token"
 
-  function copyWebhookUrl() {
-    navigator.clipboard.writeText(webhookUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  function copyToClipboard(text: string, key: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(""), 2000);
   }
 
   const isMetaChannel = ["whatsapp", "instagram", "messenger"].includes(channel.type);
@@ -424,12 +425,17 @@ function ChannelModal({
       });
 
       const data = await res.json();
+      // Sauvegarder le verifyToken auto-généré pour l'afficher
+      if (data.verifyToken) {
+        setSavedVerifyToken(data.verifyToken);
+      }
       setResult({
         ok: res.ok && data.channel?.status === "connected",
         message: data.message || (res.ok ? "Connecté !" : "Erreur inconnue"),
       });
 
-      if (res.ok && data.channel?.status === "connected") {
+      // Ne ferme pas auto si un verifyToken a été généré (l'utilisateur doit le copier)
+      if (res.ok && data.channel?.status === "connected" && !data.verifyToken) {
         setTimeout(onSaved, 1500);
       }
     } catch {
@@ -484,21 +490,45 @@ function ChannelModal({
                 </code>
                 <button
                   type="button"
-                  onClick={copyWebhookUrl}
+                  onClick={() => copyToClipboard(webhookUrl, "url")}
                   className="shrink-0 bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
                 >
-                  {copied ? "Copié !" : "Copier"}
+                  {copied === "url" ? "Copié !" : "Copier"}
                 </button>
               </div>
+
+              {/* Verify Token — affiché après sauvegarde ou si déjà présent */}
+              {(savedVerifyToken || form.verifyToken) && (
+                <div>
+                  <p className="text-xs font-semibold text-blue-800 mt-2 mb-1">🔑 Verify Token</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono text-blue-900 break-all">
+                      {savedVerifyToken || form.verifyToken}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(savedVerifyToken || form.verifyToken || "", "token")}
+                      className="shrink-0 bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
+                    >
+                      {copied === "token" ? "Copié !" : "Copier"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
                 <p className="font-medium mb-1">📋 Étapes pour connecter :</p>
                 <ol className="list-decimal list-inside space-y-0.5">
                   <li>Créez une app Meta Developer</li>
                   <li>Ajoutez le produit {channel.name} API</li>
                   <li>Dans Webhooks, collez l&apos;URL ci-dessus</li>
-                  <li>Entrez le <strong>Verify Token</strong> que vous choisissez ci-dessous</li>
+                  {savedVerifyToken ? (
+                    <li>Collez le <strong>Verify Token</strong> juste au-dessus (auto-généré)</li>
+                  ) : (
+                    <li>Entrez le <strong>Verify Token</strong> que vous choisissez (champ ci-dessous)</li>
+                  )}
                   <li>Meta enverra une requête de vérification</li>
-                  <li>Une fois vérifié, sauvegardez ici</li>
+                  <li>Une fois vérifié, vous recevrez les messages ici</li>
                 </ol>
               </div>
             </div>

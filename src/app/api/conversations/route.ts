@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getSupabaseAdminClient } from "@/lib/supabase/client";
 import { getApiTenantId } from "@/lib/api-utils";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -7,7 +7,7 @@ import type { Database } from "@/lib/supabase/database.types";
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get("status");
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
     const body = await request.json();
     const { message, customerId, channelId, channelType, customerName, customerEmail } = body;

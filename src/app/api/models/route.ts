@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getSupabaseAdminClient } from "@/lib/supabase/client";
 import { getApiTenantId } from "@/lib/api-utils";
 import type { ModelProvider } from "@/lib/models/types";
 
@@ -28,7 +28,7 @@ const PROVIDER_DEFAULT_MODELS: Record<ModelProvider, string[]> = {
 // GET
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
     if (!tenantId) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 // POST — sauvegarde ou met à jour la configuration d'un provider
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
 // DELETE — supprime la configuration d'un provider
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {

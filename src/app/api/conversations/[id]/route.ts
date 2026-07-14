@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getSupabaseAdminClient } from "@/lib/supabase/client";
 import { getApiTenantId } from "@/lib/api-utils";
 
 // GET /api/conversations/[id] — Récupère les messages d'une conversation
@@ -13,7 +13,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
@@ -66,7 +66,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
@@ -166,7 +166,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {

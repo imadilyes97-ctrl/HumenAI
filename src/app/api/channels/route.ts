@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getSupabaseAdminClient } from "@/lib/supabase/client";
 import { getApiTenantId } from "@/lib/api-utils";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -9,7 +9,7 @@ import type { Database } from "@/lib/supabase/database.types";
 // GET /api/channels — liste les canaux d'un tenant
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
     const searchParams = request.nextUrl.searchParams;
     const type = searchParams.get("type");
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 // POST /api/channels — sauvegarde les credentials et connecte
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
     const body = await request.json();
     const { type, credentials, settings } = body;
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
 // DELETE /api/channels — déconnecte un canal
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const tenantId = await getApiTenantId(request);
     const id = request.nextUrl.searchParams.get("id");
 

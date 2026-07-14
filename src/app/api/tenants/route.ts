@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getSupabaseAdminClient } from "@/lib/supabase/client";
 import { getApiTenantId } from "@/lib/api-utils";
 
 // HumenAI — Tenant management API
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Tenant ID requis" }, { status: 400 });
     }
 
-    const supabase = getSupabaseServerClient(request);
+    const supabase = getSupabaseAdminClient();
     const { data: tenant, error } = await supabase
       .from("tenants")
       .select("id, name, slug, plan, settings, created_at")

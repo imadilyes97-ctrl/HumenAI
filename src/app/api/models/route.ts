@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseServerClient(request);
     const tenantId = request.headers.get("x-tenant-id");
     const body = await request.json();
-    const { provider: providerName, apiKey, models, defaultModel, isActive, priority } = body;
+    const { provider: providerName, apiKey, models, defaultModel, capabilities, isActive, priority } = body;
 
     if (!tenantId) {
       return NextResponse.json(
@@ -102,15 +102,19 @@ export async function POST(request: NextRequest) {
       .eq("provider", p)
       .maybeSingle();
 
+    // Utiliser les capacités envoyées par l'utilisateur, sinon les défauts du provider
+    const selectedCaps = capabilities || PROVIDER_CAPABILITIES[p] || ["text"];
+    const actualActive = isActive !== undefined ? isActive : selectedCaps.length > 0;
+
     const record = {
       tenant_id: tenantId,
       provider: p,
       label: PROVIDER_LABELS[p] || p,
       api_key: apiKey,
       models: models || PROVIDER_DEFAULT_MODELS[p] || ["gpt-4o-mini"],
-      capabilities: PROVIDER_CAPABILITIES[p] || ["text"],
+      capabilities: selectedCaps,
       default_model: defaultModel || PROVIDER_DEFAULT_MODELS[p]?.[0] || "gpt-4o-mini",
-      is_active: isActive !== undefined ? isActive : true,
+      is_active: actualActive,
       priority: priority || 1,
       updated_at: now,
     };

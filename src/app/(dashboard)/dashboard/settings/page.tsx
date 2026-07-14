@@ -19,6 +19,7 @@ interface ProviderConfig {
   label: string;
   apiKey: string;
   models: string[];
+  capabilities: string[];
   defaultModel: string;
   isActive: boolean;
   priority: number;
@@ -184,7 +185,10 @@ export default function SettingsPage() {
         ) : (
           <div className="space-y-3">
             {PROVIDERS.map((p) => {
-              const connected = isProviderConnected(p.id);
+              const config = getProviderConfig(p.id);
+              const connected = config?.isActive || false;
+              const caps = config?.capabilities || [];
+              const capLabels: Record<string, string> = { text: "📝 Texte", vision: "🖼️ Image", audio: "🎤 Vocal" };
               return (
                 <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-surface-secondary transition-colors">
                   <div className="flex items-center gap-3">
@@ -196,16 +200,18 @@ export default function SettingsPage() {
                           <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Connecte</span>
                         )}
                       </div>
-                      <div className="flex gap-1 mt-0.5">
-                        {p.capabilities.map((cap) => (
-                          <span key={cap} className="text-xs text-text-secondary">{cap}</span>
-                        ))}
-                      </div>
+                      {caps.length > 0 && (
+                        <div className="flex gap-1 mt-0.5 flex-wrap">
+                          {caps.map((cap) => (
+                            <span key={cap} className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-text-secondary">{capLabels[cap] || cap}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <button
                     onClick={() => setActiveModal(p.id)}
-                    className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                    className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors shrink-0 ${
                       connected
                         ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
                         : "bg-brand-600 text-white hover:bg-brand-700"
@@ -382,9 +388,21 @@ function ProviderModal({
   const [apiKey, setApiKey] = useState(existingConfig?.apiKey || "");
   const [selectedModel, setSelectedModel] = useState(existingConfig?.defaultModel || provider.models[0]);
   const [priority, setPriority] = useState(existingConfig?.priority || 1);
-  const [isActive, setIsActive] = useState(existingConfig?.isActive ?? true);
+  const [caps, setCaps] = useState<string[]>(existingConfig?.capabilities || []);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const CAP_OPTIONS = [
+    { key: "text", label: "📝 Texte", desc: "Messages textuels" },
+    { key: "vision", label: "🖼️ Image", desc: "Photos, screenshots" },
+    { key: "audio", label: "🎤 Vocal", desc: "Messages vocaux, audios" },
+  ] as const;
+
+  function toggleCap(key: string) {
+    setCaps((prev) =>
+      prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key]
+    );
+  }
 
   async function handleConnect(e: React.FormEvent) {
     e.preventDefault();
@@ -398,8 +416,8 @@ function ProviderModal({
         body: JSON.stringify({
           provider: provider.id,
           apiKey,
+          capabilities: caps,
           defaultModel: selectedModel,
-          isActive,
           priority,
         }),
       });
@@ -466,17 +484,41 @@ function ProviderModal({
             </select>
           </div>
 
+          {/* Choix des capacités */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Capacités activées</label>
+            <div className="flex flex-wrap gap-2">
+              {CAP_OPTIONS.map((opt) => {
+                const selected = caps.includes(opt.key);
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => toggleCap(opt.key)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm border transition-all ${
+                      selected
+                        ? "border-brand-500 bg-brand-50 text-brand-700 font-medium"
+                        : "border-border text-text-secondary hover:border-brand-300"
+                    }`}
+                  >
+                    <span className={selected ? "" : "opacity-40"}>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {caps.length === 0 && (
+              <p className="text-xs text-red-500 mt-1">Sélectionnez au moins une capacité pour activer ce provider.</p>
+            )}
+          </div>
+
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="accent-brand-600" />
-              Actif
-            </label>
             <div className="flex items-center gap-2 text-sm">
-              <label>Priorite :</label>
+              <label>Priorité :</label>
               <input type="number" min={1} max={10} value={priority}
                 onChange={(e) => setPriority(parseInt(e.target.value))}
                 className="w-16 px-2 py-1 border border-border rounded-lg text-sm text-center" />
             </div>
+            <span className="text-xs text-text-secondary">Plus le chiffre est bas, plus ce provider est prioritaire</span>
           </div>
 
           {result && (

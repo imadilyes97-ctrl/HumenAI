@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 // ============================================================
 // Types
@@ -387,6 +387,12 @@ function ChannelModal({
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [savedVerifyToken, setSavedVerifyToken] = useState<string | null>(null);
 
+  // Auto-generer un verify token immédiatement (comme n8n)
+  const autoVerifyToken = useMemo(() => {
+    if (channel.type === "whatsapp") return null; // WhatsApp a son propre champ
+    return crypto.randomUUID();
+  }, [channel.type]);
+
   const webhookUrl = `https://humen-ai-pi.vercel.app/api/webhooks/${channel.type}/${tenantSlug}`;
   const [copied, setCopied] = useState(""); // "" | "url" | "token"
 
@@ -395,6 +401,13 @@ function ChannelModal({
     setCopied(key);
     setTimeout(() => setCopied(""), 2000);
   }
+
+  // Injecter le verify token dans le form avant soumission
+  useEffect(() => {
+    if (autoVerifyToken && !form.verifyToken) {
+      setForm(prev => ({ ...prev, verifyToken: autoVerifyToken }));
+    }
+  }, [autoVerifyToken, form.verifyToken]);
 
   const isMetaChannel = ["whatsapp", "instagram", "messenger"].includes(channel.type);
 
@@ -486,17 +499,18 @@ function ChannelModal({
                 </button>
               </div>
 
-              {/* Verify Token — affiché après sauvegarde ou si déjà présent */}
-              {(savedVerifyToken || form.verifyToken) && (
+              {/* Verify Token — toujours affiché pour les canaux Meta */}
+              {(savedVerifyToken || autoVerifyToken || form.verifyToken) && (
                 <div>
                   <p className="text-xs font-semibold text-blue-800 mt-2 mb-1">🔑 Verify Token</p>
+                  <p className="text-xs text-blue-700 mb-1">Copiez ce token dans <strong>Meta Developer Portal &gt; Webhooks &gt; Verify Token</strong> :</p>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono text-blue-900 break-all">
-                      {savedVerifyToken || form.verifyToken}
+                      {savedVerifyToken || autoVerifyToken || form.verifyToken}
                     </code>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(savedVerifyToken || form.verifyToken || "", "token")}
+                      onClick={() => copyToClipboard(savedVerifyToken || autoVerifyToken || form.verifyToken || "", "token")}
                       className="shrink-0 bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
                     >
                       {copied === "token" ? "Copié !" : "Copier"}
@@ -506,18 +520,13 @@ function ChannelModal({
               )}
 
               <div className="bg-white border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
-                <p className="font-medium mb-1">📋 Étapes pour connecter :</p>
+                <p className="font-medium mb-1">📋 Comment connecter {channel.name} :</p>
                 <ol className="list-decimal list-inside space-y-0.5">
-                  <li>Créez une app Meta Developer</li>
-                  <li>Ajoutez le produit {channel.name} API</li>
-                  <li>Dans Webhooks, collez l&apos;URL ci-dessus</li>
-                  {savedVerifyToken ? (
-                    <li>Collez le <strong>Verify Token</strong> juste au-dessus (auto-généré)</li>
-                  ) : (
-                    <li>Entrez le <strong>Verify Token</strong> que vous choisissez (champ ci-dessous)</li>
-                  )}
-                  <li>Meta enverra une requête de vérification</li>
-                  <li>Une fois vérifié, vous recevrez les messages ici</li>
+                  <li>Copiez l&apos;URL du webhook ci-dessus</li>
+                  <li>Copiez le <strong>Verify Token</strong> juste en dessous</li>
+                  <li>Dans <strong>Meta Developer Portal &gt; {channel.name} &gt; Webhooks</strong>, collez les deux</li>
+                  <li>Meta vérifie automatiquement → ✅ confirmé</li>
+                  <li>Revenez ici, remplissez les champs ci-dessous et cliquez <strong>Connecter</strong></li>
                 </ol>
               </div>
             </div>

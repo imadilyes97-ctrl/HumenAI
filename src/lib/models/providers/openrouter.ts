@@ -1,14 +1,22 @@
-// OpenRouter provider (multi-model gateway)
+// OpenRouter provider (multi-model gateway — supports image_url like OpenAI)
 import type { OrchestrationRequest } from "../types";
 
+interface ContentBlock {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string; detail?: string };
+}
+
 export async function callOpenRouter(apiKey: string, model: string, request: OrchestrationRequest) {
+  const userContent: ContentBlock[] = buildContentBlocks(request);
+
   const messages = [
     { role: "system", content: request.systemPrompt },
     ...request.conversationHistory.map(m => ({
       role: m.role,
       content: m.content,
     })),
-    { role: "user", content: request.message },
+    { role: "user", content: userContent.length === 1 ? userContent[0].text || request.message : userContent },
   ];
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -19,8 +27,13 @@ export async function callOpenRouter(apiKey: string, model: string, request: Orc
       "HTTP-Referer": "https://humenai.app",
       "X-Title": "HumenAI",
     },
-    body: JSON.stringify({ model, messages, max_tokens: 2048, temperature: 0.3 }),
-    signal: AbortSignal.timeout(30000),
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: 4096,
+      temperature: parseFloat(request.systemPrompt.match(/TEMPERATURE:\s*([\d.]+)/i)?.[1] || "0.7"),
+    }),
+    signal: AbortSignal.timeout(45000),
   });
 
   if (!res.ok) {
@@ -38,4 +51,20 @@ export async function callOpenRouter(apiKey: string, model: string, request: Orc
       completion: data.usage?.completion_tokens,
     },
   };
+}
+
+function buildContentBlocks(request: OrchestrationRequest): ContentBlock[] {
+  const blocks: ContentBlock[] = [{ type: "text", text: request.message || "Décris cette image." }];
+
+  if (request.attachments) {
+    for (const att of request.attachments) {
+      if (att.type === "image") {
+        blocks.push({ type: "image_url", image_url: { url: att.url, detail: "auto" } });
+      }
+      if (att.type === "audio") {
+        blocks.push({ type: "text", text: `[Audio joint: ${att.url}]` });
+      }
+    }
+  }
+  return blocks;
 }

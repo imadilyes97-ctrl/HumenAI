@@ -1,14 +1,25 @@
-// Anthropic provider
+// Anthropic provider — supports image via base64
 import type { OrchestrationRequest } from "../types";
+
+interface ContentBlock {
+  type: "text" | "image";
+  text?: string;
+  source?: {
+    type: "base64";
+    media_type: string;
+    data: string;
+  };
+}
 
 export async function callAnthropic(apiKey: string, model: string, request: OrchestrationRequest) {
   const systemMsg = request.systemPrompt;
-  const chatMessages = request.conversationHistory.map(m => ({
+  const chatMessages: { role: string; content: string | ContentBlock[] }[] = request.conversationHistory.map(m => ({
     role: m.role === "assistant" ? "assistant" : "user",
     content: m.content,
   }));
 
-  chatMessages.push({ role: "user", content: buildContent(request) });
+  const userContent: ContentBlock[] = await buildContentBlocks(request);
+  chatMessages.push({ role: "user", content: userContent });
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -21,10 +32,10 @@ export async function callAnthropic(apiKey: string, model: string, request: Orch
       model,
       system: systemMsg,
       messages: chatMessages,
-      max_tokens: 2048,
-      temperature: 0.3,
+      max_tokens: 4096,
+      temperature: parseFloat(systemMsg.match(/TEMPERATURE:\s*([\d.]+)/i)?.[1] || "0.7"),
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(45000),
   });
 
   if (!res.ok) {
@@ -44,15 +55,32 @@ export async function callAnthropic(apiKey: string, model: string, request: Orch
   };
 }
 
-function buildContent(request: OrchestrationRequest): string {
-  if (!request.attachments || request.attachments.length === 0) {
-    return request.message;
-  }
+async function buildContentBlocks(request: OrchestrationRequest): Promise<ContentBlock[]> {
+  const blocks: ContentBlock[] = [{ type: "text", text: request.message || "Décris cette image." }];
 
-  let result = request.message;
-  for (const att of request.attachments) {
-    if (att.type === "image") result += `\n[Image: ${att.url}]`;
-    if (att.type === "audio") result += `\n[Audio: ${att.url}]`;
+  if (request.attachments) {
+    for (const att of request.attachments) {
+      if (att.type === "image") {
+        try {
+          const b64 = await urlToBase64(att.url);
+          blocks.push({
+            type: "image",
+            source: { type: "base64", media_type: att.mimeType || "image/jpeg", data: b64 },
+          });
+        } catch {
+          blocks.push({ type: "text", text: `[Image: ${att.url}]` });
+        }
+      }
+      if (att.type === "audio") {
+        blocks.push({ type: "text", text: `[Audio joint: ${att.url}]` });
+      }
+    }
   }
-  return result;
+  return blocks;
+}
+
+async function urlToBase64(url: string): Promise<string> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  const buf = Buffer.from(await res.arrayBuffer());
+  return buf.toString("base64");
 }

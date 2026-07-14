@@ -11,6 +11,7 @@ import { sendMetaMessage } from "@/lib/api/channels/meta-sender";
 import type { ModelProvider, ModelCapability } from "@/lib/models/types";
 import { searchDocuments } from "@/lib/rag/embedding";
 import { buildUnifiedSystemPrompt } from "@/lib/ai/language";
+import { parseBehaviorConfig, buildBehaviorSystemPrompt } from "@/lib/ai/behavior";
 
 // ---------------------------------------------------------------------------
 // Admin client (bypass RLS)
@@ -172,6 +173,10 @@ export async function POST(
       greeting,
       fallbackMsg,
     });
+
+    // Behavior config (prank mode, checkout mode, personnalité)
+    const behaviorConfig = parseBehaviorConfig(languageRules || null);
+    systemPrompt += "\n" + buildBehaviorSystemPrompt(behaviorConfig, brandTone);
 
     // RAG context
     let ragContext = "";

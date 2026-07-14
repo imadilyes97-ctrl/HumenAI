@@ -1,22 +1,29 @@
-// OpenAI provider
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// OpenAI provider — supports image_url native
 import type { OrchestrationRequest } from "../types";
 
+interface ContentBlock {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string; detail?: "low" | "high" | "auto" };
+}
+
 export async function callOpenAI(apiKey: string, model: string, request: OrchestrationRequest) {
-  const messages: { role: string; content: any }[] = [
+  const content: ContentBlock[] = buildContentBlocks(request);
+
+  const messages: { role: string; content: ContentBlock[] | string }[] = [
     { role: "system", content: request.systemPrompt },
     ...request.conversationHistory.map(m => ({
       role: m.role,
       content: m.content,
     })),
-    { role: "user", content: buildContent(request) },
+    { role: "user", content },
   ];
 
-  const body: any = {
+  const body: Record<string, unknown> = {
     model,
     messages,
-    max_tokens: 2048,
-    temperature: 0.3,
+    max_tokens: 4096,
+    temperature: parseFloat(request.systemPrompt.match(/TEMPERATURE:\s*([\d.]+)/i)?.[1] || "0.7"),
   };
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -26,7 +33,7 @@ export async function callOpenAI(apiKey: string, model: string, request: Orchest
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(45000),
   });
 
   if (!res.ok) {
@@ -46,15 +53,21 @@ export async function callOpenAI(apiKey: string, model: string, request: Orchest
   };
 }
 
-function buildContent(request: OrchestrationRequest): string {
-  if (!request.attachments || request.attachments.length === 0) {
-    return request.message;
-  }
+function buildContentBlocks(request: OrchestrationRequest): ContentBlock[] {
+  const blocks: ContentBlock[] = [{ type: "text", text: request.message || "Décris cette image." }];
 
-  let result = request.message;
-  for (const att of request.attachments) {
-    if (att.type === "image") result += `\n[Image: ${att.url}]`;
-    if (att.type === "audio") result += `\n[Audio: ${att.url}]`;
+  if (request.attachments) {
+    for (const att of request.attachments) {
+      if (att.type === "image") {
+        blocks.push({
+          type: "image_url",
+          image_url: { url: att.url, detail: "auto" },
+        });
+      }
+      if (att.type === "audio") {
+        blocks.push({ type: "text", text: `[Audio joint: ${att.url}]` });
+      }
+    }
   }
-  return result;
+  return blocks;
 }

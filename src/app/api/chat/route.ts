@@ -3,12 +3,13 @@ import { getSupabaseServerClient } from "@/lib/supabase/client";
 import { modelOrchestrator } from "@/lib/models/orchestrator";
 import type { ProviderConfig, ModelProvider, ModelCapability } from "@/lib/models/types";
 import { buildUnifiedSystemPrompt } from "@/lib/ai/language";
+import { parseBehaviorConfig, buildBehaviorSystemPrompt } from "@/lib/ai/behavior";
 import { searchDocuments } from "@/lib/rag/embedding";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tenantId, message, conversationId } = body;
+    const { tenantId, message, conversationId, attachments } = body;
 
     const supabase = getSupabaseServerClient(request);
 
@@ -49,7 +50,11 @@ export async function POST(request: NextRequest) {
       fallbackMsg,
     });
 
-    // 4. Inject RAG context (documents de connaissance)
+    // 4. Inject behavior config (prank mode, checkout mode, personnalité fine)
+    const behaviorConfig = parseBehaviorConfig(rawSettings?.language_rules as string | null);
+    systemPrompt += "\n" + buildBehaviorSystemPrompt(behaviorConfig, brandTone);
+
+    // 5. Inject RAG context (documents de connaissance)
     try {
       const similarityThreshold = (rawSettings?.similarity_threshold as number) || 0.65;
       const maxChunks = (rawSettings?.max_chunks as number) || 5;
@@ -65,7 +70,7 @@ export async function POST(request: NextRequest) {
       // RAG not available, continue without
     }
 
-    // 4. No providers configured => fallback
+    // 6. No providers configured => fallback
     if (!providers || providers.length === 0) {
       return NextResponse.json({
         reply: "Aucun modèle IA connecté. Veuillez configurer une clé API dans les paramètres.",
@@ -73,7 +78,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 5. Format providers for orchestrator
+    // 7. Format providers for orchestrator
     const providerConfigs = providers.map(p => ({
       id: p.id,
       tenantId: p.tenant_id,
@@ -88,18 +93,23 @@ export async function POST(request: NextRequest) {
       createdAt: p.created_at,
     } satisfies Partial<ProviderConfig>));
 
-    // 6. Call orchestrator
+    // 8. Call orchestrator
     const result = await modelOrchestrator.orchestrate(
       {
         tenantId,
         message,
         conversationHistory: [],
         systemPrompt,
+        attachments: attachments?.length ? attachments.map((a: { type: string; url: string; mimeType: string }) => ({
+          type: a.type as "image" | "audio" | "document",
+          url: a.url,
+          mimeType: a.mimeType || "image/jpeg",
+        })) : undefined,
       },
       providerConfigs
     );
 
-    // 7. Save conversation + message
+    // 9. Save conversation + message
     const convId = conversationId || `conv_${Date.now()}`;
     await supabase.from("messages").insert({
       conversation_id: convId,

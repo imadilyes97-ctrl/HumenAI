@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getApiTenantId } from "@/lib/api-utils";
 
 // HumenAI — Tenant management API
 
 export async function GET(request: NextRequest) {
   try {
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
       return NextResponse.json({ error: "Tenant ID requis" }, { status: 400 });

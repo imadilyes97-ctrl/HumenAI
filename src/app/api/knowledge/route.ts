@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/client";
+import { getApiTenantId } from "@/lib/api-utils";
 import { processDocument } from "@/lib/rag/embedding";
 
 // ---------------------------------------------------------------------------
@@ -29,7 +30,7 @@ interface DocumentInfo {
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
       return NextResponse.json({ error: "x-tenant-id requis" }, { status: 400 });
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
       return NextResponse.json({ error: "x-tenant-id requis" }, { status: 400 });
@@ -186,7 +187,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
     const id = request.nextUrl.searchParams.get("id");
 
     if (!tenantId) {

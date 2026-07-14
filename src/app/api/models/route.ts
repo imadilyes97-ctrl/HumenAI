@@ -1,26 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getApiTenantId } from "@/lib/api-utils";
 import type { ModelProvider } from "@/lib/models/types";
 
 // HumenAI — Models API
-// Configuration des fournisseurs de modèles IA par tenant
 
 const PROVIDER_LABELS: Record<ModelProvider, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  google: "Google Gemini",
-  mistral: "Mistral",
-  deepseek: "DeepSeek",
-  openrouter: "OpenRouter",
+  openai: "OpenAI", anthropic: "Anthropic", google: "Google Gemini",
+  mistral: "Mistral", deepseek: "DeepSeek", openrouter: "OpenRouter",
 };
 
 const PROVIDER_CAPABILITIES: Record<ModelProvider, string[]> = {
-  openai: ["text", "vision", "audio"],
-  anthropic: ["text", "vision"],
-  google: ["text", "vision", "audio"],
-  mistral: ["text"],
-  deepseek: ["text"],
-  openrouter: ["text", "vision"],
+  openai: ["text", "vision", "audio"], anthropic: ["text", "vision"],
+  google: ["text", "vision", "audio"], mistral: ["text"],
+  deepseek: ["text"], openrouter: ["text", "vision"],
 };
 
 const PROVIDER_DEFAULT_MODELS: Record<ModelProvider, string[]> = {
@@ -32,18 +25,12 @@ const PROVIDER_DEFAULT_MODELS: Record<ModelProvider, string[]> = {
   openrouter: ["openrouter/auto"],
 };
 
-// GET — liste les providers configurés pour un tenant
+// GET
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "En-tête x-tenant-id requis" },
-        { status: 400 }
-      );
-    }
+    const tenantId = await getApiTenantId(request);
+    if (!tenantId) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
     const { data: providers, error } = await supabase
       .from("model_providers")
@@ -73,16 +60,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
-    const body = await request.json();
-    const { provider: providerName, apiKey, models, defaultModel, capabilities, isActive, priority } = body;
+    const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
-      return NextResponse.json(
-        { error: "En-tête x-tenant-id requis" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
+
+    const body = await request.json();
+    const { provider: providerName, apiKey, models, defaultModel, capabilities, isActive, priority } = body;
 
     if (!providerName || !apiKey) {
       return NextResponse.json(
@@ -156,15 +141,13 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
-    const id = request.nextUrl.searchParams.get("id");
+    const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
-      return NextResponse.json(
-        { error: "En-tête x-tenant-id requis" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
+
+    const id = request.nextUrl.searchParams.get("id");
 
     if (!id) {
       return NextResponse.json(

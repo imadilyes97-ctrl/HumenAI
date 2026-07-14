@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getApiTenantId } from "@/lib/api-utils";
 import type { Database } from "@/lib/supabase/database.types";
 
 // HumenAI — Conversations API
@@ -7,7 +8,7 @@ import type { Database } from "@/lib/supabase/database.types";
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get("status");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
     const body = await request.json();
     const { message, customerId, channelId, channelType, customerName, customerEmail } = body;
 

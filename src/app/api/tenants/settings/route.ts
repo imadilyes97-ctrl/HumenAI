@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getApiTenantId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const tenantId = request.headers.get("x-tenant-id") || "";
-  if (!tenantId) return NextResponse.json({ error: "Tenant requis" }, { status: 400 });
+  const tenantId = await getApiTenantId(request);
+  if (!tenantId) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   const supabase = getSupabaseServerClient(request);
   const { data } = await supabase.from("tenant_settings").select("*").eq("tenant_id", tenantId).single();
   return NextResponse.json(data || {});
@@ -11,9 +12,9 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const tenantId = request.headers.get("x-tenant-id") || "";
+    const tenantId = await getApiTenantId(request);
     const body = await request.json();
-    if (!tenantId) return NextResponse.json({ error: "Tenant requis" }, { status: 400 });
+    if (!tenantId) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
     const supabase = getSupabaseServerClient(request);
     const { error } = await supabase.from("tenant_settings").update(body).eq("tenant_id", tenantId);

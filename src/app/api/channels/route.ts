@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getApiTenantId } from "@/lib/api-utils";
 import type { Database } from "@/lib/supabase/database.types";
 
 // HumenAI — Channels API
@@ -9,7 +10,7 @@ import type { Database } from "@/lib/supabase/database.types";
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
     const searchParams = request.nextUrl.searchParams;
     const type = searchParams.get("type");
 
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
     const body = await request.json();
     const { type, credentials, settings } = body;
 
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
     const id = request.nextUrl.searchParams.get("id");
 
     if (!tenantId) {

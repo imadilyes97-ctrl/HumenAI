@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/client";
+import { getApiTenantId } from "@/lib/api-utils";
 
 // GET /api/conversations/[id] — Récupère les messages d'une conversation
 export async function GET(
@@ -13,7 +14,7 @@ export async function GET(
   try {
     const { id } = await params;
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
       return NextResponse.json({ error: "x-tenant-id requis" }, { status: 400 });
@@ -66,7 +67,7 @@ export async function POST(
   try {
     const { id } = await params;
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
       return NextResponse.json({ error: "x-tenant-id requis" }, { status: 400 });
@@ -166,7 +167,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const supabase = getSupabaseServerClient(request);
-    const tenantId = request.headers.get("x-tenant-id");
+    const tenantId = await getApiTenantId(request);
 
     if (!tenantId) {
       return NextResponse.json({ error: "x-tenant-id requis" }, { status: 400 });

@@ -148,6 +148,29 @@ export async function getServerUser(request: Request) {
 }
 
 // ---------------------------------------------------------------------------
+// getTenantIdFromJWT — extrait le tenant_id depuis un token JWT
+// Fallback pour les API routes si le middleware n'a pas forwardé x-tenant-id
+// ---------------------------------------------------------------------------
+
+/**
+ * Extrait le tenant_id depuis un access token JWT Supabase.
+ * Utilisé comme fallback dans les API routes.
+ */
+export async function getTenantIdFromJWT(
+  accessToken: string
+): Promise<string | null> {
+  try {
+    const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { data } = await supabase.auth.getUser(accessToken);
+    return (data?.user?.app_metadata?.tenant_id as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Type helper — extracts row type from a table name
 // ---------------------------------------------------------------------------
 export type TableRow<T extends keyof Database["public"]["Tables"]> =

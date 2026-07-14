@@ -18,6 +18,7 @@ const PUBLIC_ROUTES = [
   "/register",
   "/api/auth",
   "/api/webhooks",
+  "/api/widget",
   "/widget",
 ];
 

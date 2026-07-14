@@ -1,59 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSupabaseServerClient } from "@/lib/supabase/client";
 
 // HumenAI — Tenant management API
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { name, email } = body;
+    const tenantId = request.headers.get("x-tenant-id");
 
-    if (!name || !email) {
-      return NextResponse.json(
-        { error: "Missing required fields: name, email" },
-        { status: 400 }
-      );
+    if (!tenantId) {
+      return NextResponse.json({ error: "Tenant ID requis" }, { status: 400 });
     }
 
-    // TODO: Create tenant in database
-    // 1. Generate unique slug from name
-    // 2. Create tenant record
-    // 3. Create admin user
-    // 4. Create default channel configs
-    // 5. Initialize default settings based on sector template
-    // 6. Return tenant data + session token
+    const supabase = getSupabaseServerClient(request);
+    const { data: tenant, error } = await supabase
+      .from("tenants")
+      .select("id, name, slug, plan, settings, created_at")
+      .eq("id", tenantId)
+      .single();
 
-    const tenant = {
-      id: `tenant_${Date.now()}`,
-      name,
-      slug: name.toLowerCase().replace(/\s+/g, "-"),
-      plan: "standard",
-      createdAt: new Date().toISOString(),
-    };
+    if (error || !tenant) {
+      return NextResponse.json({ error: "Tenant introuvable" }, { status: 404 });
+    }
 
-    return NextResponse.json(tenant, { status: 201 });
+    return NextResponse.json(tenant);
   } catch (error) {
-    console.error("Tenant creation error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error("Tenant GET error:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
-}
-
-export async function GET(request: NextRequest) {
-  const tenantId = request.headers.get("x-tenant-id");
-
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: "Tenant ID required" },
-      { status: 400 }
-    );
-  }
-
-  // TODO: Fetch tenant from database
-  return NextResponse.json({
-    id: tenantId,
-    name: "Demo Boutique",
-    plan: "standard",
-  });
 }

@@ -213,11 +213,18 @@ export default function IntegrationsPage() {
   const [savedChannels, setSavedChannels] = useState<SavedChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [tenantSlug, setTenantSlug] = useState<string>("demo");
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
 
   // Charger les canaux sauvegardés
   useEffect(() => {
     loadChannels();
+    fetch("/api/tenants").then(r => r.ok && r.json()).then(d => {
+      if (d?.slug) setTenantSlug(d.slug);
+    }).catch(() => {});
   }, []);
+
+  const scriptCode = `<script src="https://humen-ai-pi.vercel.app/widget.js" data-tenant="${tenantSlug}"><\/script>`;
 
   async function loadChannels() {
     setLoading(true);
@@ -288,22 +295,47 @@ export default function IntegrationsPage() {
         </div>
       )}
 
-      {/* Section Widget Web (pas de modal nécessaire) */}
-      <div className="bg-white rounded-xl border border-border p-6">
-        <h3 className="font-semibold mb-2">Widget de chat web</h3>
-        <p className="text-sm text-text-secondary mb-4">
-          Intégrez le chatbot directement sur votre site. Ajoutez ce script avant la fermeture du
-          <code className="text-brand-600 bg-brand-50 px-1 rounded mx-1">&lt;body&gt;</code> de votre site.
-        </p>
-        <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
-{`<script>
-  (function(w,d,s,o,f){w.HumenAI=w.HumenAI||function(){(w.HumenAI.q=w.HumenAI.q||[]).push(arguments)};
-  w.HumenAI('init', 'VOTRE_CLE_PUBLIQUE');
-  s=d.createElement('script');s.async=1;s.src=o;
-  d.head.appendChild(s);
-})(window,document,'https://widget.humenai.app/widget.js');
-</script>`}
-        </pre>
+      {/* Section Widget Web */}
+      <div className="bg-white rounded-xl border border-border p-6 space-y-4">
+        <div>
+          <h3 className="font-semibold">🌐 Widget de chat web</h3>
+        <p className="text-sm text-text-secondary mt-1">
+            Ajoutez ce script avant la fermeture du <code className="text-brand-600 bg-brand-50 px-1 rounded">&lt;/body&gt;</code> de votre site.
+            Le widget apparaîtra en bas à droite.
+          </p>
+        </div>
+
+        {/* Preview */}
+        <div className="border border-border rounded-xl p-4 bg-gradient-to-br from-gray-50 to-white">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-brand-600 text-white flex items-center justify-center text-xl shadow-lg">💬</div>
+            <div>
+              <p className="text-sm font-medium">Assistant HumenAI</p>
+              <p className="text-xs text-text-secondary">Visible sur votre site</p>
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <div className="bg-brand-50 text-brand-700 text-xs px-3 py-2 rounded-2xl rounded-br-md max-w-[75%]">Bonjour ! Comment puis-je vous aider ?</div>
+          </div>
+        </div>
+
+        {/* Embed code */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium">Code à intégrer</label>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(scriptCode);
+                setCopiedEmbed(true);
+                setTimeout(() => setCopiedEmbed(false), 2000);
+              }}
+              className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+            >
+              {copiedEmbed ? "✓ Copié !" : "📋 Copier"}
+            </button>
+          </div>
+          <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap">{scriptCode}</pre>
+        </div>
       </div>
 
       {/* Modale de connexion */}

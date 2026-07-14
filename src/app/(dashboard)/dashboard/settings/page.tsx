@@ -216,7 +216,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold">Configuration</h1>
         <p className="text-sm text-text-secondary mt-1">
-          Personnalisez l'identité, le comportement et les modèles IA de votre chatbot.
+          Personnalisez l&apos;identité, le comportement et les modèles IA de votre chatbot.
         </p>
       </div>
 
@@ -325,8 +325,8 @@ export default function SettingsPage() {
 
             {/* Mission */}
             <div>
-              <label className="block text-sm font-medium mb-1">Mission de l'entreprise</label>
-              <p className="text-xs text-text-secondary mb-1.5">Le chatbot connaît la mission de votre entreprise et s'en inspire</p>
+              <label className="block text-sm font-medium mb-1">Mission de l&apos;entreprise</label>
+              <p className="text-xs text-text-secondary mb-1.5">Le chatbot connaît la mission de votre entreprise et s&apos;en inspire</p>
               <textarea
                 value={settings.company_mission}
                 onChange={(e) => updateField("company_mission", e.target.value)}
@@ -473,7 +473,7 @@ export default function SettingsPage() {
 
       {/* ============ HORAIRES ============ */}
       <section className="bg-white rounded-xl border border-border p-6 space-y-4">
-        <h2 className="font-semibold text-lg">🕐 Horaires d'ouverture</h2>
+        <h2 className="font-semibold text-lg">🕐 Horaires d&apos;ouverture</h2>
 
         {!settingsLoading && (
           <>
@@ -485,7 +485,7 @@ export default function SettingsPage() {
                   onChange={(e) => updateField("business_hours_enabled", e.target.checked)}
                   className="accent-brand-600"
                 />
-                <span className="font-medium">Activer les horaires d'ouverture</span>
+                <span className="font-medium">Activer les horaires d&apos;ouverture</span>
               </label>
             </div>
 
@@ -505,7 +505,7 @@ export default function SettingsPage() {
                   <option value="Asia/Dubai">Asie/Dubaï (UTC+4)</option>
                 </select>
                 <p className="text-xs text-text-secondary mt-1">
-                  ⏳ Les horaires d'ouverture détaillés (jours et heures) arrivent bientôt.
+                  ⏳ Les horaires d&apos;ouverture détaillés (jours et heures) arrivent bientôt.
                 </p>
               </div>
             )}
@@ -523,7 +523,7 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium mb-1">
                 Seuil de similarité : {settings.similarity_threshold.toFixed(3)}
               </label>
-              <p className="text-xs text-text-secondary mb-1.5">Plus c'est bas, plus le chatbot cherche large dans les documents</p>
+              <p className="text-xs text-text-secondary mb-1.5">Plus c&apos;est bas, plus le chatbot cherche large dans les documents</p>
               <input
                 type="range"
                 min={0}

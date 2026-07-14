@@ -231,14 +231,12 @@ async function testConnection(
 
     case "instagram":
     case "messenger": {
-      if (!creds.pageId && !hasVerifyToken)
-        return { success: false, error: "Page ID requis" };
-      if (!creds.accessToken && !hasVerifyToken)
+      if (!creds.accessToken)
         return { success: false, error: "Access Token requis" };
       if (creds.accessToken && creds.accessToken.length < 20)
         return { success: false, error: "Token invalide (trop court)" };
-      if (!creds.accessToken && hasVerifyToken)
-        return { success: false, error: "PENDING" };
+      if (type === "instagram" && !creds.instagramId)
+        return { success: false, error: "Instagram Business Account ID requis" };
       return { success: true };
     }
 

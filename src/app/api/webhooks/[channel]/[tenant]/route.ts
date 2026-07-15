@@ -114,28 +114,38 @@ export async function POST(
     if (attachments) {
       for (const att of attachments) {
         if (att.type === "image" && !att.url.startsWith("data:")) {
+          // Debug : log du payload brut pour comprendre la structure
+          console.log(`[webhooks/${channel}/${tenant}] Tentative download: url=${att.url.slice(0, 50)}..., attachmentId=${att.attachmentId || "NON"}`);
+
+          // Stratégie 1 : download direct depuis l'URL
           const downloaded = await downloadImageFromMetaMessage(att.url, credentials);
           if (downloaded) {
             att.data = downloaded.data;
             att.mimeType = downloaded.mimeType;
             imagesDisponibles = true;
             console.log(`[webhooks/${channel}/${tenant}] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB base64)`);
-          } else if (att.attachmentId && credentials.accessToken) {
-            // Fallback: API Graph avec attachment_id (bien plus fiable)
-            console.log(`[webhooks/${channel}/${tenant}] Tentative Graph API pour ${att.attachmentId}...`);
-            const graphResult = await downloadMessengerAttachmentViaGraph(att.attachmentId, credentials.accessToken);
-            if (graphResult) {
-              att.data = graphResult.data;
-              att.mimeType = graphResult.mimeType;
-              imagesDisponibles = true;
-              console.log(`[webhooks/${channel}/${tenant}] Image téléchargée via Graph ✅ (${(graphResult.data.length / 1024).toFixed(1)} KB base64)`);
+          } else {
+            // Stratégie 2 : Graph API avec attachment_id (Messenger/Instagram)
+            const token = credentials.accessToken || credentials.access_token || "";
+            if (att.attachmentId && token) {
+              console.log(`[webhooks/${channel}/${tenant}] Tentative Graph API pour ${att.attachmentId}...`);
+              const graphResult = await downloadMessengerAttachmentViaGraph(att.attachmentId, token);
+              if (graphResult) {
+                att.data = graphResult.data;
+                att.mimeType = graphResult.mimeType;
+                imagesDisponibles = true;
+                console.log(`[webhooks/${channel}/${tenant}] Image téléchargée via Graph ✅ (${(graphResult.data.length / 1024).toFixed(1)} KB base64)`);
+              } else {
+                console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable (toutes les stratégies échouées)`);
+                att.url = "";
+              }
+            } else if (token) {
+              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Pas d'attachmentId mais token présent`);
+              att.url = "";
             } else {
-              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable (URL + Graph API échoués)`);
+              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable + pas de token disponible`);
               att.url = "";
             }
-          } else {
-            console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable`);
-            att.url = "";
           }
         } else if (att.type === "image" && att.url.startsWith("data:")) {
           imagesDisponibles = true;

@@ -55,6 +55,28 @@ export class ModelOrchestrator {
   }
 
   /**
+   * Create a built-in Gemini vision fallback when no tenant provider supports vision
+   */
+  private createBuiltinVisionProvider(): ProviderConfig | null {
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+    if (!geminiKey) return null;
+
+    return {
+      id: "builtin-gemini-vision",
+      tenantId: "system",
+      provider: "google" as ModelProvider,
+      label: "Gemini Vision (Fallback)",
+      apiKey: geminiKey,
+      models: ["gemini-2.5-flash", "gemini-1.5-flash"],
+      capabilities: ["text", "vision"] as ModelCapability[],
+      defaultModel: "gemini-2.5-flash",
+      isActive: true,
+      priority: 999, // Lowest priority — only used when nothing else works
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  /**
    * Main orchestration: analyze request → pick provider → call API → return
    */
   async orchestrate(
@@ -62,7 +84,32 @@ export class ModelOrchestrator {
     providerConfigs: ProviderConfig[]
   ): Promise<OrchestrationResult> {
     const requiredCaps = this.getRequiredCapabilities(request);
-    const provider = this.pickProvider(providerConfigs, requiredCaps);
+
+    // Try tenant providers first
+    let provider = this.pickProvider(providerConfigs, requiredCaps);
+
+    // If vision is required but no tenant provider supports it, use built-in Gemini
+    if (requiredCaps.includes("vision") && provider) {
+      const providerSupportsVision = provider.capabilities.includes("vision");
+      if (!providerSupportsVision) {
+        const builtin = this.createBuiltinVisionProvider();
+        if (builtin) {
+          console.log(`[orchestrator] Fallback vision: built-in Gemini activé (tenant provider ${provider.provider} ne supporte pas la vision)`);
+          provider = builtin;
+        }
+      }
+    }
+
+    if (!provider) {
+      // Dernier recours: même sans tenant providers, essayer Gemini vision
+      if (requiredCaps.includes("vision")) {
+        const builtin = this.createBuiltinVisionProvider();
+        if (builtin) {
+          console.log(`[orchestrator] Fallback vision: built-in Gemini (aucun provider tenant)`);
+          provider = builtin;
+        }
+      }
+    }
 
     if (!provider) {
       return {
@@ -82,7 +129,7 @@ export class ModelOrchestrator {
         latencyMs: Date.now() - startTime,
       };
     } catch (error) {
-      // Try fallback to next available provider
+      // Try fallback to next available tenant provider
       const fallbackConfigs = providerConfigs
         .filter((c) => c.id !== provider.id && c.isActive)
         .sort((a, b) => a.priority - b.priority);

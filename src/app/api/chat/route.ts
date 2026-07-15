@@ -140,10 +140,16 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
       }
     }
 
-    // 8c. Fallback si image envoyée mais pas visible (même après tentative de téléchargement)
+    // 8c. Fallback si image pas téléchargée — NE PAS bloquer Gemini
     const hasDataImage = attachments?.some((a: {type: string; data?: string}) => a.type === "image" && a.data);
+    const hasBuiltinGeminiFallbackChat = !!(process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY);
     if (hasImages && !hasDataImage) {
-      systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir (échec technique de téléchargement).\n- Ne décris PAS l'image — tu ne la vois pas\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente\n- N'invente RIEN sur l'image";
+      if (hasBuiltinGeminiFallbackChat) {
+        // Gemini peut tenter de charger l'URL directement
+        systemPrompt += "\n\n## PHOTO REÇUE\n📸 Le client a envoyé une photo. Elle n'a pas pu être pré-téléchargée mais l'URL est fournie.\n- Essaie de charger l'image depuis l'URL\n- Si tu arrives à la voir → réponds naturellement\n- Si tu n'y arrives pas → dis: \"Je n'arrive pas à ouvrir cette photo. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente";
+      } else {
+        systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir.\n- Dis honnêtement: \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente\n- N'invente RIEN sur l'image";
+      }
     }
 
     // 8e. Fallback si provider ne supporte pas la vision (DeepSeek, Mistral...)

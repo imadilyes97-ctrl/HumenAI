@@ -161,7 +161,10 @@ export async function POST(
             console.log(`[webhooks/${channel}/${tenant}] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB base64)`);
           } else {
             // Stratégie 2 : Graph API avec attachment_id (Messenger/Instagram)
-            const token = credentials.accessToken || credentials.access_token || credentials.pageAccessToken || credentials.page_access_token || "";
+            const token = credentials.accessToken || credentials.access_token ||
+              credentials.pageAccessToken || credentials.page_access_token ||
+              credentials.fb_page_token || credentials.fan_page_access_token ||
+              credentials.bearer_token || credentials.token || "";
             if (att.attachmentId && token) {
               console.log(`[webhooks/${channel}/${tenant}] Tentative Graph API pour ${att.attachmentId}...`);
               const graphResult = await downloadMessengerAttachmentViaGraph(att.attachmentId, token);
@@ -316,9 +319,19 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
       }
     }
 
-    // 8. Fallback si aucune image dispo → dire la vérité dans le prompt
+    // 8. Fallback si aucune image dispo — ne PAS mentir à l'IA si Gemini est dispo
+    // Si Gemini peut prendre le relais, on ne l'empêche PAS d'essayer
+    const hasBuiltinGeminiFallbackWA = !!(process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY);
     if (hasImages && !imagesDisponibles) {
-      systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir (échec technique du téléchargement).\n- Ne décris PAS l'image — tu ne la vois pas\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser techniquement. Pouvez-vous me décrire ce que c'est ?\"\n- Relance naturellement sur la vente après\n- N'invente RIEN sur le contenu de l'image";
+      if (hasBuiltinGeminiFallbackWA) {
+        // Gemini va être utilisé (fallback orchestrateur) — il peut tenter
+        // de charger l'URL directement. On lui dit la vérité, pas "tu vois pas"
+        console.log(`[webhooks/${channel}/${tenant}] ℹ️ Image download échoué mais Gemini tentera de la charger`);
+        systemPrompt += "\n\n## PHOTO REÇUE — TENTATIVE DE CHARGEMENT\n📸 Le client a envoyé une photo. L'URL est fournie dans les attachments.\n- Essaie de charger l'image depuis l'URL transmise\n- Si tu arrives à la voir → décris-la et réponds naturellement\n- Si tu n'y arrives pas → dis honnêtement: \"Je n'arrive pas à ouvrir cette photo. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente";
+      } else {
+        // Aucun provider vision disponible → prompt honnête
+        systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir.\n- Dis honnêtement: \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente\n- N'invente RIEN sur l'image";
+      }
     }
 
     // 8b. Fallback si provider ne supporte pas la vision (DeepSeek, Mistral...)

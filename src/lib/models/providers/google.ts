@@ -17,10 +17,26 @@ export async function callGoogle(apiKey: string, model: string, request: Orchest
     for (const att of request.attachments) {
       if (att.type === "image") {
         // Priorité data (base64 direct depuis download serveur) > téléchargement URL
-        const b64 = att.data || await urlToBase64(att.url);
-        userParts.push({
-          inline_data: { mime_type: att.mimeType || "image/jpeg", data: b64 },
-        });
+        if (att.data) {
+          userParts.push({
+            inline_data: { mime_type: att.mimeType || "image/jpeg", data: att.data },
+          });
+        } else {
+          // Tentative de téléchargement depuis l'URL (Gemini peut réussir là où
+          // notre serveur a échoué — User-Agent navigateur, cookies, etc.)
+          try {
+            const b64 = await urlToBase64(att.url);
+            userParts.push({
+              inline_data: { mime_type: att.mimeType || "image/jpeg", data: b64 },
+            });
+          } catch {
+            // Même Gemini n'arrive pas à télécharger l'image (URL expirée)
+            // On inclut quand même l'URL et on laisse Gemini décider
+            userParts.push({
+              text: `📸 Le client a envoyé une photo (URL: ${att.url})`,
+            });
+          }
+        }
       }
       if (att.type === "audio") {
         // Gemini supporte l'audio inline nativement (opus, mp3, wav, etc.)
@@ -31,7 +47,7 @@ export async function callGoogle(apiKey: string, model: string, request: Orchest
           });
         } else {
           // Fallback texte si audio non téléchargé
-          userParts.push({ text: `📢 Message vocal reçu (${att.url})` });
+          userParts.push({ text: `📢 Message vocal reçu de la part du client. Essaie de le lire depuis cette URL si possible: ${att.url}` });
         }
       }
     }
@@ -70,7 +86,15 @@ export async function callGoogle(apiKey: string, model: string, request: Orchest
 }
 
 async function urlToBase64(url: string): Promise<string> {
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(15000),
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      "Referer": "https://www.facebook.com/",
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
   return buf.toString("base64");
 }

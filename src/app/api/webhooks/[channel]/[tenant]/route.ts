@@ -317,6 +317,13 @@ export async function POST(
       });
     }
 
+    // Cleanup : libérer les buffers d'images de la mémoire
+    if (attachments) {
+      for (const att of attachments) {
+        delete att.data;
+      }
+    }
+
     return NextResponse.json({ status: "ok" });
   } catch (error) {
     console.error(`[webhooks/${channel}/${tenant}] Error:`, error);

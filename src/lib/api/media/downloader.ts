@@ -2,6 +2,10 @@
 // HumenAI — Media Downloader
 // Télécharge les images des canaux Meta (Messenger/Instagram/WhatsApp)
 // et les convertit en base64 pour les passer directement aux providers IA.
+//
+// 🔒 SÉCURITÉ : Les images sont traitées UNIQUEMENT en mémoire RAM.
+//    Aucun fichier n'est écrit sur le disque. Le buffer est libéré par le
+//    garbage collector dès que la réponse IA est envoyée.
 // ============================================================================
 
 interface DownloadResult {

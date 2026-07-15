@@ -206,7 +206,14 @@ export async function downloadImageFromMetaMessage(
   credentials: Record<string, string>
 ): Promise<{ data: string; mimeType: string } | null> {
   // Essayer les tokens sous tous les noms possibles
-  const accessToken = credentials.accessToken || credentials.access_token || credentials.pageAccessToken || "";
+  // Messenger: page_access_token, access_token, fb_page_token
+  // Instagram: instagram_access_token, ig_access_token
+  // WhatsApp: bearer_token, token
+  const accessToken = credentials.accessToken || credentials.access_token ||
+    credentials.pageAccessToken || credentials.page_access_token ||
+    credentials.fb_page_token || credentials.fan_page_access_token ||
+    credentials.bearer_token || credentials.token ||
+    "";
   const apiKey = credentials.apiKey || credentials.api_key || "";
 
   // 1. URL sans token (CDN publique)

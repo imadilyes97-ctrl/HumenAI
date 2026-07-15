@@ -161,7 +161,7 @@ export async function POST(
             console.log(`[webhooks/${channel}/${tenant}] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB base64)`);
           } else {
             // Stratégie 2 : Graph API avec attachment_id (Messenger/Instagram)
-            const token = credentials.accessToken || credentials.access_token || "";
+            const token = credentials.accessToken || credentials.access_token || credentials.pageAccessToken || credentials.page_access_token || "";
             if (att.attachmentId && token) {
               console.log(`[webhooks/${channel}/${tenant}] Tentative Graph API pour ${att.attachmentId}...`);
               const graphResult = await downloadMessengerAttachmentViaGraph(att.attachmentId, token);
@@ -172,20 +172,27 @@ export async function POST(
                 console.log(`[webhooks/${channel}/${tenant}] Image téléchargée via Graph ✅ (${(graphResult.data.length / 1024).toFixed(1)} KB base64)`);
               } else {
                 console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable (toutes les stratégies échouées)`);
-                att.url = "";
+                // 🔴 CRITIQUE: NE PAS effacer att.url ici !
+                // L'IA peut essayer de télécharger l'image directement (Gemini le fait)
+                // Et surtout: l'orchestrateur a besoin de savoir qu'une image existe
+                // pour activer le fallback vision → Gemini
+                imagesDisponibles = false;
               }
-            } else if (token) {
-              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Pas d'attachmentId mais token présent`);
-              att.url = "";
+            } else if (att.attachmentId && !token) {
+              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ attachmentId présent mais PAS DE TOKEN`);
+              // Garder l'URL originale — Gemini peut peut-être la télécharger direct
+              imagesDisponibles = false;
             } else {
-              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable + pas de token disponible`);
-              att.url = "";
+              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Download échoué — URL originale conservée`);
+              // 🔴 CRITIQUE: NE PAS effacer att.url !
+              // L'URL originale reste pour que l'orchestrateur active le fallback vision
+              // Gemini 2.5 Flash pourra tenter de charger l'image directement
+              imagesDisponibles = false;
             }
           }
         } else if (att.type === "image" && att.url.startsWith("data:")) {
           imagesDisponibles = true;
         } else if (att.type === "audio") {
-          // Audio déjà téléchargé via WhatsApp ci-dessus
           if (att.data) imagesDisponibles = true;
         }
       }
@@ -349,10 +356,10 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
           message: messageText || (attachments?.length ? "[Image reçue du client]" : ""),
           conversationHistory,
           systemPrompt,
-          attachments: attachments?.filter(a => a.url).map(a => ({
+          attachments: attachments?.map(a => ({
             type: a.type,
             url: a.url,
-            mimeType: a.mimeType,
+            mimeType: a.mimeType || "image/jpeg",
             data: a.data,
           })),
         },

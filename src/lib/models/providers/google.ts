@@ -16,14 +16,23 @@ export async function callGoogle(apiKey: string, model: string, request: Orchest
   if (request.attachments) {
     for (const att of request.attachments) {
       if (att.type === "image") {
-        // Priorité data (base64 direct depuis download serveur) > téléchargement
+        // Priorité data (base64 direct depuis download serveur) > téléchargement URL
         const b64 = att.data || await urlToBase64(att.url);
         userParts.push({
           inline_data: { mime_type: att.mimeType || "image/jpeg", data: b64 },
         });
       }
       if (att.type === "audio") {
-        userParts.push({ text: `[Audio: ${att.url}]` });
+        // Gemini supporte l'audio inline nativement (opus, mp3, wav, etc.)
+        if (att.data) {
+          const audioMime = att.mimeType || "audio/ogg; codecs=opus";
+          userParts.push({
+            inline_data: { mime_type: audioMime, data: att.data },
+          });
+        } else {
+          // Fallback texte si audio non téléchargé
+          userParts.push({ text: `📢 Message vocal reçu (${att.url})` });
+        }
       }
     }
   }

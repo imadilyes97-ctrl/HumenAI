@@ -128,10 +128,14 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
     }
 
     // 8c. Fallback si provider ne supporte pas la vision (DeepSeek, Mistral...)
+    // MAIS: vérifier si le fallback Gemini intégré peut prendre le relais
     const hasVisionProvider = providers?.some((p: { capabilities: string[] }) =>
       p.capabilities?.includes("vision")
     );
-    if (hasImages && hasDataImage && !hasVisionProvider) {
+    const hasBuiltinGeminiFallback = !!(process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+    const visionEffectivementDisponible = hasVisionProvider || hasBuiltinGeminiFallback;
+
+    if (hasImages && hasDataImage && !visionEffectivementDisponible) {
       systemPrompt += "\n\n## NOTE TECHNIQUE — PROVIDER SANS VISION\n⚠️ L'image a bien été téléchargée mais ton modèle IA actuel ne supporte PAS la vision.\n- Tu ne PEUX PAS voir l'image\n- Ne décris PAS l'image, n'invente RIEN sur son contenu\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je ne peux pas analyser les images actuellement.\"\n- Relance naturellement sur la vente";
     }
 
@@ -142,10 +146,11 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
         message,
         conversationHistory: [],
         systemPrompt,
-        attachments: attachments?.length ? attachments.map((a: { type: string; url: string; mimeType: string }) => ({
+        attachments: attachments?.length ? attachments.map((a: { type: string; url: string; mimeType: string; data?: string }) => ({
           type: a.type as "image" | "audio" | "document",
           url: a.url,
           mimeType: a.mimeType || "image/jpeg",
+          data: a.data,
         })) : undefined,
       },
       providerConfigs

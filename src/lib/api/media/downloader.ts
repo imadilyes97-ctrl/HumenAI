@@ -165,12 +165,15 @@ export async function downloadWhatsAppMedia(
   whatsappToken: string
 ): Promise<{ data: string; mimeType: string } | null> {
   try {
-    // 1. Get media URL
+    // 1. Get media URL (WhatsApp Cloud API: GET /{media-id}?access_token=...)
     const metaRes = await fetch(
-      `https://graph.facebook.com/v21.0/${mediaId}?phone_number_id=0&access_token=${whatsappToken}`,
+      `https://graph.facebook.com/v21.0/${mediaId}?access_token=${whatsappToken}`,
       { signal: AbortSignal.timeout(10000) }
     );
-    if (!metaRes.ok) return null;
+    if (!metaRes.ok) {
+      console.warn(`[downloader] WhatsApp Media API ${metaRes.status} pour ${mediaId}`);
+      return null;
+    }
 
     const metaData = await metaRes.json() as Record<string, string>;
     const fileUrl = metaData.url;

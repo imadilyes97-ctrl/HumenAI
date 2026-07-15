@@ -12,7 +12,7 @@ import type { ModelProvider, ModelCapability } from "@/lib/models/types";
 import { searchDocuments } from "@/lib/rag/embedding";
 import { buildUnifiedSystemPrompt } from "@/lib/ai/language";
 import { parseBehaviorConfig, buildBehaviorSystemPrompt } from "@/lib/ai/behavior";
-import { downloadImageFromMetaMessage, downloadMessengerAttachmentViaGraph } from "@/lib/api/media/downloader";
+import { downloadImageFromMetaMessage, downloadMessengerAttachmentViaGraph, downloadWhatsAppMedia } from "@/lib/api/media/downloader";
 import { searchProducts, buildProductContext } from "@/lib/api/products/search";
 
 // ---------------------------------------------------------------------------
@@ -108,13 +108,48 @@ export async function POST(
     const channelId = channelData.id;
     const credentials = channelData.credentials as Record<string, string>;
 
-    // 2.5 Télécharger les images Meta côté serveur
-    // Les URLs platform-lookaside.fbsbx.com expirent → on les download + base64 direct
+    // 2.5 Télécharger les images/audios côté serveur
+    // WhatsApp : Media ID → download via WhatsApp Media API
+    // Messenger/Instagram : URLs Meta expirent → download + base64 direct ou Graph API
     let imagesDisponibles = false;
     if (attachments) {
       for (const att of attachments) {
+        // === STRATÉGIE WHATSAPP : Media API via mediaId ===
+        if (att.mediaId) {
+          const waToken = credentials.accessToken || credentials.access_token || "";
+          if (waToken) {
+            console.log(`[webhooks/${channel}/${tenant}] WhatsApp Media API: ${att.mediaId} (${att.type})`);
+            if (att.type === "image") {
+              const mediaResult = await downloadWhatsAppMedia(att.mediaId, waToken);
+              if (mediaResult) {
+                att.data = mediaResult.data;
+                att.mimeType = mediaResult.mimeType;
+                att.url = `data:${mediaResult.mimeType};base64,${att.data}`;
+                imagesDisponibles = true;
+                console.log(`[webhooks/${channel}/${tenant}] WhatsApp image téléchargée ✅ (${(mediaResult.data.length / 1024).toFixed(1)} KB base64)`);
+              } else {
+                console.warn(`[webhooks/${channel}/${tenant}] ⚠️ WhatsApp image non téléchargeable (mediaId=${att.mediaId})`);
+              }
+            } else if (att.type === "audio") {
+              // WhatsApp audio → download via Media API (Gemini gère l'audio inline)
+              const mediaResult = await downloadWhatsAppMedia(att.mediaId, waToken);
+              if (mediaResult) {
+                att.data = mediaResult.data;
+                att.mimeType = mediaResult.mimeType;
+                imagesDisponibles = true;
+                console.log(`[webhooks/${channel}/${tenant}] WhatsApp audio téléchargé ✅ (${(mediaResult.data.length / 1024).toFixed(1)} KB base64)`);
+              } else {
+                console.warn(`[webhooks/${channel}/${tenant}] ⚠️ WhatsApp audio non téléchargeable (mediaId=${att.mediaId})`);
+              }
+            }
+          } else {
+            console.warn(`[webhooks/${channel}/${tenant}] ⚠️ WhatsApp media mais pas de token disponible`);
+          }
+          continue;
+        }
+
+        // === STRATÉGIE MESSENGER / INSTAGRAM : URL Meta qui expire ===
         if (att.type === "image" && !att.url.startsWith("data:")) {
-          // Debug : log du payload brut pour comprendre la structure
           console.log(`[webhooks/${channel}/${tenant}] Tentative download: url=${att.url.slice(0, 50)}..., attachmentId=${att.attachmentId || "NON"}`);
 
           // Stratégie 1 : download direct depuis l'URL
@@ -149,6 +184,9 @@ export async function POST(
           }
         } else if (att.type === "image" && att.url.startsWith("data:")) {
           imagesDisponibles = true;
+        } else if (att.type === "audio") {
+          // Audio déjà téléchargé via WhatsApp ci-dessus
+          if (att.data) imagesDisponibles = true;
         }
       }
     }
@@ -277,11 +315,15 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
     }
 
     // 8b. Fallback si provider ne supporte pas la vision (DeepSeek, Mistral...)
+    // MAIS: vérifier si le fallback Gemini intégré peut prendre le relais
     const hasVisionProvider = providers?.some((p: { capabilities: string[] }) =>
       p.capabilities?.includes("vision")
     );
-    if (hasImages && imagesDisponibles && !hasVisionProvider) {
-      console.log(`[webhooks/${channel}/${tenant}] ⚠️ Image dispo mais aucun provider vision`);
+    const hasBuiltinGeminiFallback = !!(process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+    const visionEffectivementDisponible = hasVisionProvider || hasBuiltinGeminiFallback;
+
+    if (hasImages && imagesDisponibles && !visionEffectivementDisponible) {
+      console.log(`[webhooks/${channel}/${tenant}] ⚠️ Image dispo mais AUCUN provider vision (ni tenant, ni fallback Gemini)`);
       systemPrompt += "\n\n## NOTE TECHNIQUE — PROVIDER SANS VISION\n⚠️ L'image a bien été téléchargée mais ton modèle IA actuel ne supporte PAS la vision.\n- Tu ne PEUX PAS voir l'image — tu ne reçois que le texte\n- Ne décris PAS l'image, n'invente RIEN sur son contenu\n- Dis honnêtement : \"J'ai bien reçu votre photo mais actuellement je ne peux pas analyser les images. Pouvez-vous me décrire ce que c'est ?\"\n- Relance naturellement sur la vente";
     }
 
@@ -454,7 +496,7 @@ interface ParsedMessage {
   customerName: string | null;
   messageText: string;
   channelType: string;
-  attachments?: { type: "image"; url: string; mimeType: string; data?: string; attachmentId?: string }[];
+  attachments?: { type: "image" | "audio"; url: string; mimeType: string; data?: string; attachmentId?: string; mediaId?: string }[];
 }
 
 function parseMetaMessage(channel: string, body: Record<string, unknown>): ParsedMessage | null {
@@ -476,21 +518,40 @@ function parseMetaMessage(channel: string, body: Record<string, unknown>): Parse
 
     if (!message) return null;
 
+    const msgType = message.type as string;
     const text = message.text as Record<string, string> | undefined;
     const interactive = message.interactive as Record<string, Record<string, string>> | undefined;
     const profile = contact?.profile as Record<string, string> | undefined;
 
+    // Texte du message (caption si image/audio/video avec légende)
     const messageText =
       text?.body ||
       (message.caption as string) ||
-      (message.type === "interactive" ? interactive?.button_reply?.title || interactive?.list_reply?.title : null) ||
+      (msgType === "interactive" ? interactive?.button_reply?.title || interactive?.list_reply?.title : null) ||
       "";
+
+    // Extraction des médias WhatsApp (image, audio, video)
+    let attachments: ParsedMessage["attachments"];
+    if (msgType === "image" || msgType === "audio" || msgType === "video") {
+      const media = message[msgType] as Record<string, string> | undefined;
+      const mediaId = media?.id;
+      const mimeType = media?.mime_type || (msgType === "image" ? "image/jpeg" : "audio/ogg");
+      if (mediaId) {
+        attachments = [{
+          type: msgType === "video" ? "image" : (msgType as "image" | "audio"),
+          url: "",  // Sera téléchargé via Media API
+          mimeType,
+          mediaId,
+        }];
+      }
+    }
 
     return {
       customerId: message.from as string,
       customerName: profile?.name || null,
       messageText,
       channelType: "whatsapp",
+      attachments,
     };
   }
 

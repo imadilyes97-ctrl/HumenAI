@@ -55,20 +55,20 @@ export class ModelOrchestrator {
   }
 
   /**
-   * Create a built-in Gemini vision fallback when no tenant provider supports vision
+   * Create a built-in Gemini vision/audio fallback when no tenant provider supports them
    */
-  private createBuiltinVisionProvider(): ProviderConfig | null {
+  private createBuiltinFallbackProvider(): ProviderConfig | null {
     const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
     if (!geminiKey) return null;
 
     return {
-      id: "builtin-gemini-vision",
+      id: "builtin-gemini",
       tenantId: "system",
       provider: "google" as ModelProvider,
-      label: "Gemini Vision (Fallback)",
+      label: "Gemini Flash (Fallback intégré)",
       apiKey: geminiKey,
       models: ["gemini-2.5-flash", "gemini-1.5-flash"],
-      capabilities: ["text", "vision"] as ModelCapability[],
+      capabilities: ["text", "vision", "audio"] as ModelCapability[],
       defaultModel: "gemini-2.5-flash",
       isActive: true,
       priority: 999, // Lowest priority — only used when nothing else works
@@ -88,24 +88,30 @@ export class ModelOrchestrator {
     // Try tenant providers first
     let provider = this.pickProvider(providerConfigs, requiredCaps);
 
-    // If vision is required but no tenant provider supports it, use built-in Gemini
-    if (requiredCaps.includes("vision") && provider) {
-      const providerSupportsVision = provider.capabilities.includes("vision");
-      if (!providerSupportsVision) {
-        const builtin = this.createBuiltinVisionProvider();
+    // Vision/audio fallback: si le provider tenant ne supporte pas les capacités requises
+    if (provider) {
+      const needsMultimodal = requiredCaps.some(cap => cap !== "text");
+      const providerSupportsAll = requiredCaps.every(cap => provider!.capabilities.includes(cap));
+
+      if (needsMultimodal && !providerSupportsAll) {
+        const missingCaps = requiredCaps.filter(cap => !provider!.capabilities.includes(cap));
+        console.log(`[orchestrator] Fallback multimodal: ${provider.provider} ne supporte pas ${missingCaps.join(", ")}`);
+
+        const builtin = this.createBuiltinFallbackProvider();
         if (builtin) {
-          console.log(`[orchestrator] Fallback vision: built-in Gemini activé (tenant provider ${provider.provider} ne supporte pas la vision)`);
+          console.log(`[orchestrator] Fallback → Gemini intégré (${missingCaps.join(", ")})`);
           provider = builtin;
         }
       }
     }
 
     if (!provider) {
-      // Dernier recours: même sans tenant providers, essayer Gemini vision
-      if (requiredCaps.includes("vision")) {
-        const builtin = this.createBuiltinVisionProvider();
+      // Dernier recours: même sans tenant providers, essayer Gemini intégré
+      const needsMultimodal = requiredCaps.some(cap => cap !== "text");
+      if (needsMultimodal) {
+        const builtin = this.createBuiltinFallbackProvider();
         if (builtin) {
-          console.log(`[orchestrator] Fallback vision: built-in Gemini (aucun provider tenant)`);
+          console.log(`[orchestrator] Fallback: Gemini intégré (aucun provider tenant)`);
           provider = builtin;
         }
       }

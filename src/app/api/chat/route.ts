@@ -121,7 +121,14 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
       createdAt: p.created_at,
     } satisfies Partial<ProviderConfig>));
 
-    // 8. Call orchestrator
+    // 8b. Fallback si image envoyée mais pas visible
+    const hasImages = attachments && attachments.length > 0;
+    const hasDataImage = attachments?.some((a: {type: string; data?: string}) => a.type === "image" && a.data);
+    if (hasImages && !hasDataImage) {
+      systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir (échec technique).\n- Ne décris PAS l'image — tu ne la vois pas\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente\n- N'invente RIEN sur l'image";
+    }
+
+    // 9. Call orchestrator
     const result = await modelOrchestrator.orchestrate(
       {
         tenantId,

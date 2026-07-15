@@ -110,6 +110,7 @@ export async function POST(
 
     // 2.5 Télécharger les images Meta côté serveur
     // Les URLs platform-lookaside.fbsbx.com expirent → on les download + base64 direct
+    let imagesDisponibles = false;
     if (attachments) {
       for (const att of attachments) {
         if (att.type === "image" && !att.url.startsWith("data:")) {
@@ -117,10 +118,15 @@ export async function POST(
           if (downloaded) {
             att.data = downloaded.data;
             att.mimeType = downloaded.mimeType;
+            imagesDisponibles = true;
             console.log(`[webhooks/${channel}/${tenant}] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB base64)`);
           } else {
-            console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable, l'IA ne verra pas l'image`);
+            console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable`);
+            // Transformer en texte pour éviter d'envoyer une URL morte à l'IA
+            att.type = "text";
           }
+        } else if (att.type === "image" && att.url.startsWith("data:")) {
+          imagesDisponibles = true;
         }
       }
     }
@@ -243,7 +249,12 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
       }
     }
 
-    // 8. Appeler l'IA
+    // 8. Fallback si aucune image dispo → dire la vérité dans le prompt
+    if (hasImages && !imagesDisponibles) {
+      systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir (échec technique du téléchargement).\n- Ne décris PAS l'image — tu ne la vois pas\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser techniquement. Pouvez-vous me décrire ce que c'est ?\"\n- Relance naturellement sur la vente après\n- N'invente RIEN sur le contenu de l'image";
+    }
+
+    // 9. Appeler l'IA
     if (providers && providers.length > 0) {
       const providerConfigs = providers.map(p => ({
         id: p.id,

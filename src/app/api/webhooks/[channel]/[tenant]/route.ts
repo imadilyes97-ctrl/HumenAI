@@ -12,7 +12,7 @@ import type { ModelProvider, ModelCapability } from "@/lib/models/types";
 import { searchDocuments } from "@/lib/rag/embedding";
 import { buildUnifiedSystemPrompt } from "@/lib/ai/language";
 import { parseBehaviorConfig, buildBehaviorSystemPrompt } from "@/lib/ai/behavior";
-import { downloadImageFromMetaMessage } from "@/lib/api/media/downloader";
+import { downloadImageFromMetaMessage, downloadMessengerAttachmentViaGraph } from "@/lib/api/media/downloader";
 import { searchProducts, buildProductContext } from "@/lib/api/products/search";
 
 // ---------------------------------------------------------------------------
@@ -120,9 +120,21 @@ export async function POST(
             att.mimeType = downloaded.mimeType;
             imagesDisponibles = true;
             console.log(`[webhooks/${channel}/${tenant}] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB base64)`);
+          } else if (att.attachmentId && credentials.accessToken) {
+            // Fallback: API Graph avec attachment_id (bien plus fiable)
+            console.log(`[webhooks/${channel}/${tenant}] Tentative Graph API pour ${att.attachmentId}...`);
+            const graphResult = await downloadMessengerAttachmentViaGraph(att.attachmentId, credentials.accessToken);
+            if (graphResult) {
+              att.data = graphResult.data;
+              att.mimeType = graphResult.mimeType;
+              imagesDisponibles = true;
+              console.log(`[webhooks/${channel}/${tenant}] Image téléchargée via Graph ✅ (${(graphResult.data.length / 1024).toFixed(1)} KB base64)`);
+            } else {
+              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable (URL + Graph API échoués)`);
+              att.url = "";
+            }
           } else {
             console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable`);
-            // Marquer comme échec — on le filtrera plus tard
             att.url = "";
           }
         } else if (att.type === "image" && att.url.startsWith("data:")) {
@@ -423,7 +435,7 @@ interface ParsedMessage {
   customerName: string | null;
   messageText: string;
   channelType: string;
-  attachments?: { type: "image"; url: string; mimeType: string; data?: string }[];
+  attachments?: { type: "image"; url: string; mimeType: string; data?: string; attachmentId?: string }[];
 }
 
 function parseMetaMessage(channel: string, body: Record<string, unknown>): ParsedMessage | null {
@@ -471,14 +483,19 @@ function parseMetaMessage(channel: string, body: Record<string, unknown>): Parse
 
   if (msg) {
     const text = msg.text as string || "";
-    const imageUrl = attachments?.[0]?.payload as Record<string, string> | undefined;
+    const imagePayload = attachments?.[0]?.payload as Record<string, string> | undefined;
 
     return {
       customerId: sender?.id || "",
       customerName: null,
-      messageText: text || (imageUrl?.url ? "[Image]" : ""),
+      messageText: text || (imagePayload?.url ? "[Image]" : ""),
       channelType: channel === "instagram" ? "instagram" : "messenger",
-      attachments: imageUrl?.url ? [{ type: "image" as const, url: imageUrl.url, mimeType: "image/jpeg" }] : undefined,
+      attachments: imagePayload?.url ? [{
+        type: "image" as const,
+        url: imagePayload.url,
+        mimeType: "image/jpeg",
+        attachmentId: imagePayload.attachment_id || undefined,
+      }] : undefined,
     };
   }
 

@@ -76,6 +76,56 @@ export async function downloadMetaImage(
 }
 
 /**
+ * Télécharge une image Messenger via l'API Graph (attachment_id).
+ * Beaucoup plus fiable que les URLs platform-lookaside qui expirent.
+ */
+export async function downloadMessengerAttachmentViaGraph(
+  attachmentId: string,
+  pageAccessToken: string
+): Promise<{ data: string; mimeType: string } | null> {
+  try {
+    // 1. Appeler l'API Graph pour obtenir une URL CDN fraîche
+    const graphRes = await fetch(
+      `https://graph.facebook.com/v21.0/${attachmentId}?fields=url,mime_type&access_token=${pageAccessToken}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!graphRes.ok) {
+      console.warn(`[downloader] Graph API ${graphRes.status} pour attachment ${attachmentId}`);
+      return null;
+    }
+    const graphData = await graphRes.json();
+    const cdnUrl = graphData.url;
+    const mimeType = graphData.mime_type || "image/jpeg";
+    if (!cdnUrl) {
+      console.warn(`[downloader] Pas d'URL CDN dans la réponse Graph pour ${attachmentId}`);
+      return null;
+    }
+
+    // 2. Télécharger depuis l'URL CDN avec le token
+    const imgRes = await fetch(`${cdnUrl}&access_token=${pageAccessToken}`, {
+      signal: AbortSignal.timeout(15000),
+      headers: { "User-Agent": "HumenAI/1.0" },
+    });
+    if (!imgRes.ok) {
+      console.warn(`[downloader] CDN HTTP ${imgRes.status} pour ${attachmentId}`);
+      return null;
+    }
+
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    if (buffer.length > 10 * 1024 * 1024) {
+      console.warn(`[downloader] Image trop volumineuse: ${buffer.length} bytes`);
+      return null;
+    }
+
+    console.log(`[downloader] Graph API OK ✅ ${attachmentId} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    return { data: buffer.toString("base64"), mimeType };
+  } catch (err) {
+    console.error(`[downloader] Graph API error ${attachmentId}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
  * Cherche et télécharge une image depuis un message Meta.
  * Gère le format des URLs Messenger/Instagram.
  */

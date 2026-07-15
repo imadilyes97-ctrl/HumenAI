@@ -122,8 +122,8 @@ export async function POST(
             console.log(`[webhooks/${channel}/${tenant}] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB base64)`);
           } else {
             console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable`);
-            // Transformer en texte pour éviter d'envoyer une URL morte à l'IA
-            att.type = "text";
+            // Marquer comme échec — on le filtrera plus tard
+            att.url = "";
           }
         } else if (att.type === "image" && att.url.startsWith("data:")) {
           imagesDisponibles = true;
@@ -276,7 +276,7 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
           message: messageText || (attachments?.length ? "[Image reçue du client]" : ""),
           conversationHistory,
           systemPrompt,
-          attachments: attachments?.map(a => ({
+          attachments: attachments?.filter(a => a.url).map(a => ({
             type: a.type,
             url: a.url,
             mimeType: a.mimeType,

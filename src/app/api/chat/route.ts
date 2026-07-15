@@ -127,6 +127,14 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
       systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir (échec technique).\n- Ne décris PAS l'image — tu ne la vois pas\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente\n- N'invente RIEN sur l'image";
     }
 
+    // 8c. Fallback si provider ne supporte pas la vision (DeepSeek, Mistral...)
+    const hasVisionProvider = providers?.some((p: { capabilities: string[] }) =>
+      p.capabilities?.includes("vision")
+    );
+    if (hasImages && hasDataImage && !hasVisionProvider) {
+      systemPrompt += "\n\n## NOTE TECHNIQUE — PROVIDER SANS VISION\n⚠️ L'image a bien été téléchargée mais ton modèle IA actuel ne supporte PAS la vision.\n- Tu ne PEUX PAS voir l'image\n- Ne décris PAS l'image, n'invente RIEN sur son contenu\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je ne peux pas analyser les images actuellement.\"\n- Relance naturellement sur la vente";
+    }
+
     // 9. Call orchestrator
     const result = await modelOrchestrator.orchestrate(
       {

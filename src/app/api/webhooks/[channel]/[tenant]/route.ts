@@ -108,9 +108,10 @@ export async function POST(
     const channelId = channelData.id;
     const credentials = channelData.credentials as Record<string, string>;
 
+    // ═══════════════════════════════════════════════════════════════
     // 2.5 Télécharger les images/audios côté serveur
-    // WhatsApp : Media ID → download via WhatsApp Media API
-    // Messenger/Instagram : URLs Meta expirent → download + base64 direct ou Graph API
+    // Chaque étape est tracée avec [IMG-FLUX] pour debug Vercel
+    // ═══════════════════════════════════════════════════════════════
     let imagesDisponibles = false;
     if (attachments) {
       for (const att of attachments) {
@@ -118,7 +119,6 @@ export async function POST(
         if (att.mediaId) {
           const waToken = credentials.accessToken || credentials.access_token || "";
           if (waToken) {
-            console.log(`[webhooks/${channel}/${tenant}] WhatsApp Media API: ${att.mediaId} (${att.type})`);
             if (att.type === "image") {
               const mediaResult = await downloadWhatsAppMedia(att.mediaId, waToken);
               if (mediaResult) {
@@ -126,31 +126,30 @@ export async function POST(
                 att.mimeType = mediaResult.mimeType;
                 att.url = `data:${mediaResult.mimeType};base64,${att.data}`;
                 imagesDisponibles = true;
-                console.log(`[webhooks/${channel}/${tenant}] WhatsApp image téléchargée ✅ (${(mediaResult.data.length / 1024).toFixed(1)} KB base64)`);
+                console.log(`[IMG-FLUX] [webhook] WhatsApp image ✅ ${att.mediaId} (${(mediaResult.data.length / 1024).toFixed(1)} KB base64)`);
               } else {
-                console.warn(`[webhooks/${channel}/${tenant}] ⚠️ WhatsApp image non téléchargeable (mediaId=${att.mediaId})`);
+                console.warn(`[IMG-FLUX] [webhook] WhatsApp image ❌ ${att.mediaId}`);
               }
             } else if (att.type === "audio") {
-              // WhatsApp audio → download via Media API (Gemini gère l'audio inline)
               const mediaResult = await downloadWhatsAppMedia(att.mediaId, waToken);
               if (mediaResult) {
                 att.data = mediaResult.data;
                 att.mimeType = mediaResult.mimeType;
                 imagesDisponibles = true;
-                console.log(`[webhooks/${channel}/${tenant}] WhatsApp audio téléchargé ✅ (${(mediaResult.data.length / 1024).toFixed(1)} KB base64)`);
+                console.log(`[IMG-FLUX] [webhook] WhatsApp audio ✅ ${att.mediaId}`);
               } else {
-                console.warn(`[webhooks/${channel}/${tenant}] ⚠️ WhatsApp audio non téléchargeable (mediaId=${att.mediaId})`);
+                console.warn(`[IMG-FLUX] [webhook] WhatsApp audio ❌ ${att.mediaId}`);
               }
             }
           } else {
-            console.warn(`[webhooks/${channel}/${tenant}] ⚠️ WhatsApp media mais pas de token disponible`);
+            console.warn(`[IMG-FLUX] [webhook] WhatsApp ❌ pas de token`);
           }
           continue;
         }
 
-        // === STRATÉGIE MESSENGER / INSTAGRAM : URL Meta qui expire ===
+        // === STRATÉGIE MESSENGER / INSTAGRAM ===
         if (att.type === "image" && !att.url.startsWith("data:")) {
-          console.log(`[webhooks/${channel}/${tenant}] Tentative download: url=${att.url.slice(0, 50)}..., attachmentId=${att.attachmentId || "NON"}`);
+          console.log(`[IMG-FLUX] [webhook] 🎯 MESSENGER IMAGE REÇUE — url: ${att.url.slice(0, 60)}... attachmentId: ${att.attachmentId || "NON"}`);
 
           // Stratégie 1 : download direct depuis l'URL
           const downloaded = await downloadImageFromMetaMessage(att.url, credentials);
@@ -158,38 +157,32 @@ export async function POST(
             att.data = downloaded.data;
             att.mimeType = downloaded.mimeType;
             imagesDisponibles = true;
-            console.log(`[webhooks/${channel}/${tenant}] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB base64)`);
+            console.log(`[IMG-FLUX] [webhook] ✅ IMAGE TÉLÉCHARGÉE (${(downloaded.data.length / 1024).toFixed(1)} KB base64) — ENVOYÉE À L'IA`);
           } else {
-            // Stratégie 2 : Graph API avec attachment_id (Messenger/Instagram)
+            console.log(`[IMG-FLUX] [webhook] ❌ Stratégie 1 (download direct) ÉCHOUÉE`);
+
+            // Stratégie 2 : Graph API avec attachment_id
             const token = credentials.accessToken || credentials.access_token ||
               credentials.pageAccessToken || credentials.page_access_token ||
               credentials.fb_page_token || credentials.fan_page_access_token ||
               credentials.bearer_token || credentials.token || "";
             if (att.attachmentId && token) {
-              console.log(`[webhooks/${channel}/${tenant}] Tentative Graph API pour ${att.attachmentId}...`);
+              console.log(`[IMG-FLUX] [webhook] 🔄 Tentative Graph API (attachmentId: ${att.attachmentId})...`);
               const graphResult = await downloadMessengerAttachmentViaGraph(att.attachmentId, token);
               if (graphResult) {
                 att.data = graphResult.data;
                 att.mimeType = graphResult.mimeType;
                 imagesDisponibles = true;
-                console.log(`[webhooks/${channel}/${tenant}] Image téléchargée via Graph ✅ (${(graphResult.data.length / 1024).toFixed(1)} KB base64)`);
+                console.log(`[IMG-FLUX] [webhook] ✅ IMAGE TÉLÉCHARGÉE VIA GRAPH (${(graphResult.data.length / 1024).toFixed(1)} KB base64)`);
               } else {
-                console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable (toutes les stratégies échouées)`);
-                // 🔴 CRITIQUE: NE PAS effacer att.url ici !
-                // L'IA peut essayer de télécharger l'image directement (Gemini le fait)
-                // Et surtout: l'orchestrateur a besoin de savoir qu'une image existe
-                // pour activer le fallback vision → Gemini
+                console.warn(`[IMG-FLUX] [webhook] ❌❌ TOUTES LES STRATÉGIES ÉCHOUÉES — URL conservée pour fallback Gemini`);
                 imagesDisponibles = false;
               }
             } else if (att.attachmentId && !token) {
-              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ attachmentId présent mais PAS DE TOKEN`);
-              // Garder l'URL originale — Gemini peut peut-être la télécharger direct
+              console.warn(`[IMG-FLUX] [webhook] ❌ attachmentId présent mais PAS DE TOKEN dans les credentials`);
               imagesDisponibles = false;
             } else {
-              console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Download échoué — URL originale conservée`);
-              // 🔴 CRITIQUE: NE PAS effacer att.url !
-              // L'URL originale reste pour que l'orchestrateur active le fallback vision
-              // Gemini 2.5 Flash pourra tenter de charger l'image directement
+              console.warn(`[IMG-FLUX] [webhook] ❌ Download échoué — URL conservée pour fallback`);
               imagesDisponibles = false;
             }
           }
@@ -345,6 +338,25 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
     if (hasImages && imagesDisponibles && !visionEffectivementDisponible) {
       console.log(`[webhooks/${channel}/${tenant}] ⚠️ Image dispo mais AUCUN provider vision (ni tenant, ni fallback Gemini)`);
       systemPrompt += "\n\n## NOTE TECHNIQUE — PROVIDER SANS VISION\n⚠️ L'image a bien été téléchargée mais ton modèle IA actuel ne supporte PAS la vision.\n- Tu ne PEUX PAS voir l'image — tu ne reçois que le texte\n- Ne décris PAS l'image, n'invente RIEN sur son contenu\n- Dis honnêtement : \"J'ai bien reçu votre photo mais actuellement je ne peux pas analyser les images. Pouvez-vous me décrire ce que c'est ?\"\n- Relance naturellement sur la vente";
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RÉCAP IMAGE AVANT APPEL IA — cherche "[IMG-FLUX]"
+    // ═══════════════════════════════════════════════════════════════
+    if (hasImages) {
+      const hasAnyData = attachments?.some(a => a.data);
+      const attCount = attachments?.length || 0;
+      const withData = attachments?.filter(a => a.data).length || 0;
+      const urls = attachments?.map(a => a.url?.slice(0, 50)).join(", ") || "";
+      console.log(`[IMG-FLUX] [RÉCAP] Images: ${attCount} total, ${withData} avec base64, imagesDisponibles=${imagesDisponibles}, visionProvider=${visionEffectivementDisponible}`);
+      console.log(`[IMG-FLUX] [RÉCAP] URLs: ${urls}`);
+      if (withData === 0 && hasBuiltinGeminiFallback) {
+        console.log(`[IMG-FLUX] [RÉCAP] ⚠️ AUCUNE image en base64 MAIS Gemini tentera le download direct`);
+      } else if (withData === 0) {
+        console.log(`[IMG-FLUX] [RÉCAP] ❌❌ AUCUNE image en base64 ET aucun fallback — chatbot ne verra PAS l'image`);
+      } else {
+        console.log(`[IMG-FLUX] [RÉCAP] ✅ ${withData}/${attCount} images prêtes pour l'IA`);
+      }
     }
 
     // 9. Appeler l'IA
@@ -584,6 +596,12 @@ function parseMetaMessage(channel: string, body: Record<string, unknown>): Parse
   if (msg) {
     const text = msg.text as string || "";
     const imagePayload = attachments?.[0]?.payload as Record<string, string> | undefined;
+
+    if (imagePayload?.url) {
+      console.log(`[IMG-FLUX] [parseMetaMessage] 📸 IMAGE REÇUE — url: ${imagePayload.url.slice(0, 60)}... attachmentId: ${imagePayload.attachment_id || "NON"} texte: "${text.slice(0, 40)}"`);
+    } else {
+      console.log(`[IMG-FLUX] [parseMetaMessage] 💬 Message texte: "${text.slice(0, 60)}"`);
+    }
 
     return {
       customerId: sender?.id || "",

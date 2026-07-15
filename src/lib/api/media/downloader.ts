@@ -27,6 +27,14 @@ function isPermissionError(body: string | Record<string, unknown>): boolean {
 // Helper : construit une URL avec le bon séparateur de query params
 // ---------------------------------------------------------------------------
 
+// ═══════════════════════════════════════════════════════════════
+// LOG MARKERS pour debug Vercel — cherche "[IMG-FLUX]"
+// ═══════════════════════════════════════════════════════════════
+// Chaque étape du téléchargement d'image Messenger est tracée.
+// Dans Vercel → Functions → logs, cherche "IMG-FLUX" pour voir
+// exactement où le flux bloque.
+// ═══════════════════════════════════════════════════════════════
+
 function appendAccessToken(url: string, token: string): string {
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}access_token=${token}`;
@@ -73,23 +81,23 @@ export async function downloadMetaImage(
     clearTimeout(timeout);
 
     if (!res.ok) {
-      console.warn(`[downloader] HTTP ${res.status} pour ${url.slice(0, 60)}`);
+      console.warn(`[IMG-FLUX] [downloadMetaImage] HTTP ${res.status} pour ${url.slice(0, 80)} — ÉCHEC`);
       return null;
     }
 
     const contentType = res.headers.get("content-type") || "image/jpeg";
     const buffer = Buffer.from(await res.arrayBuffer());
     const sizeKB = (buffer.length / 1024).toFixed(1);
-    console.log(`[downloader] ✅ ${url.slice(0, 50)}… (${sizeKB} KB)`);
+    console.log(`[IMG-FLUX] [downloadMetaImage] ✅ ${url.slice(0, 60)}… (${sizeKB} KB | ${contentType})`);
 
     if (buffer.length > 10 * 1024 * 1024) {
-      console.warn(`[downloader] Image trop volumineuse: ${buffer.length} bytes`);
+      console.warn(`[IMG-FLUX] [downloadMetaImage] ❌ Trop volumineux: ${buffer.length} bytes`);
       return null;
     }
 
     return { data: buffer.toString("base64"), mimeType: contentType, size: buffer.length };
   } catch (err) {
-    console.error(`[downloader] Erreur téléchargement ${url.slice(0, 60)}:`, err instanceof Error ? err.message : err);
+    console.error(`[IMG-FLUX] [downloadMetaImage] ❌ ERREUR ${url.slice(0, 60)}:`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -116,6 +124,7 @@ export async function downloadMessengerAttachmentViaGraph(
       const mimeType = (graphData.mime_type as string) || "image/jpeg";
 
       if (cdnUrl) {
+        console.log(`[IMG-FLUX] [Graph API stratégie-1] ✅ URL fraîche obtenue: ${cdnUrl.slice(0, 60)}`);
         const imgRes = await fetch(appendAccessToken(cdnUrl, pageAccessToken), {
           signal: AbortSignal.timeout(15000),
           headers: FETCH_HEADERS,
@@ -123,21 +132,25 @@ export async function downloadMessengerAttachmentViaGraph(
         if (imgRes.ok) {
           const buffer = Buffer.from(await imgRes.arrayBuffer());
           if (buffer.length <= 10 * 1024 * 1024) {
-            console.log(`[downloader] Graph API ✅ ${attachmentId} (${(buffer.length / 1024).toFixed(1)} KB)`);
+            console.log(`[IMG-FLUX] [Graph API stratégie-1] ✅ ${attachmentId} (${(buffer.length / 1024).toFixed(1)} KB)`);
             return { data: buffer.toString("base64"), mimeType };
+          } else {
+            console.warn(`[IMG-FLUX] [Graph API stratégie-1] ❌ Trop volumineux: ${buffer.length} bytes`);
           }
+        } else {
+          console.warn(`[IMG-FLUX] [Graph API stratégie-1] ❌ HTTP ${imgRes.status} sur la fresh URL`);
         }
       }
     } else {
       const errBody = await graphRes.text();
       if (isPermissionError(errBody)) {
-        console.warn(`[downloader] ⛔ Permission insuffisante pour lire l'attachment ${attachmentId}`);
+        console.warn(`[IMG-FLUX] [Graph API] ⛔ PERMISSION INSUFFISANTE — Token nécessite pages_read_engagement (attachmentId: ${attachmentId})`);
       } else {
-        console.warn(`[downloader] Graph API ${graphRes.status}: ${errBody.slice(0, 200)}`);
+        console.warn(`[IMG-FLUX] [Graph API] ⛔ HTTP ${graphRes.status}: ${errBody.slice(0, 200)}`);
       }
     }
   } catch (err) {
-    console.warn(`[downloader] Graph API error ${attachmentId}:`, err instanceof Error ? err.message : err);
+    console.warn(`[IMG-FLUX] [Graph API] ❌ ERREUR ${attachmentId}:`, err instanceof Error ? err.message : err);
   }
 
   // Stratégie 2: {attachment-id}/picture → thumbnail (moins de permissions requises)
@@ -150,12 +163,16 @@ export async function downloadMessengerAttachmentViaGraph(
       const mimeType = thumbRes.headers.get("content-type") || "image/jpeg";
       const buffer = Buffer.from(await thumbRes.arrayBuffer());
       if (buffer.length > 1024 && buffer.length <= 10 * 1024 * 1024) {
-        console.log(`[downloader] Graph /picture ✅ ${attachmentId} (${(buffer.length / 1024).toFixed(1)} KB)`);
+        console.log(`[IMG-FLUX] [Graph API stratégie-2 thumbnail] ✅ ${attachmentId} (${(buffer.length / 1024).toFixed(1)} KB)`);
         return { data: buffer.toString("base64"), mimeType };
+      } else {
+        console.warn(`[IMG-FLUX] [Graph API stratégie-2 thumbnail] ❌ Taille invalide: ${buffer.length} bytes`);
       }
+    } else {
+      console.warn(`[IMG-FLUX] [Graph API stratégie-2 thumbnail] ❌ HTTP ${thumbRes.status}`);
     }
-  } catch {
-    // Silencieux — fallback uniquement
+  } catch (err) {
+    console.warn(`[IMG-FLUX] [Graph API stratégie-2 thumbnail] ❌ ERREUR: ${err instanceof Error ? err.message : err}`);
   }
 
   return null;
@@ -221,24 +238,43 @@ export async function downloadImageFromMetaMessage(
     "";
   const apiKey = credentials.apiKey || credentials.api_key || "";
 
+  console.log(`[IMG-FLUX] [downloadImageFromMetaMessage] 🎯 URL: ${imageUrl.slice(0, 60)}... Token présent: ${accessToken ? "OUI (" + accessToken.slice(0, 10) + "..." : "NON"}`);
+
   // 1. URL sans token (CDN publique)
   let result = await downloadMetaImage(imageUrl);
+  if (result) {
+    console.log(`[IMG-FLUX] [downloadImageFromMetaMessage] ✅ Stratégie 1 OK (sans token)`);
+    return { data: result.data, mimeType: result.mimeType };
+  }
+  console.log(`[IMG-FLUX] [downloadImageFromMetaMessage] ❌ Stratégie 1 échouée (sans token)`);
 
   // 2. URL avec accessToken (camelCase)
-  if (!result && accessToken) {
+  if (accessToken) {
     result = await downloadMetaImage(imageUrl, accessToken);
+    if (result) {
+      console.log(`[IMG-FLUX] [downloadImageFromMetaMessage] ✅ Stratégie 2 OK (avec token)`);
+      return { data: result.data, mimeType: result.mimeType };
+    }
+    console.log(`[IMG-FLUX] [downloadImageFromMetaMessage] ❌ Stratégie 2 échouée (avec token)`);
   }
 
   // 3. URL avec apiKey (fallback WhatsApp)
-  if (!result && apiKey) {
+  if (apiKey) {
     result = await downloadMetaImage(imageUrl, apiKey);
+    if (result) {
+      console.log(`[IMG-FLUX] [downloadImageFromMetaMessage] ✅ Stratégie 3 OK (apiKey)`);
+      return { data: result.data, mimeType: result.mimeType };
+    }
   }
 
-  // 4. URL sans query params (cache-bust par proxy inversé)
-  if (!result) {
-    const cleanUrl = imageUrl.split("?")[0];
-    result = await downloadMetaImage(cleanUrl);
+  // 4. URL sans query params
+  const cleanUrl = imageUrl.split("?")[0];
+  result = await downloadMetaImage(cleanUrl);
+  if (result) {
+    console.log(`[IMG-FLUX] [downloadImageFromMetaMessage] ✅ Stratégie 4 OK (sans query)`);
+    return { data: result.data, mimeType: result.mimeType };
   }
 
-  return result ? { data: result.data, mimeType: result.mimeType } : null;
+  console.log(`[IMG-FLUX] [downloadImageFromMetaMessage] ❌❌ TOUTES LES STRATÉGIES ÉCHOUÉES`);
+  return null;
 }

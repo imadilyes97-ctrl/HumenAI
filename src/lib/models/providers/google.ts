@@ -68,18 +68,38 @@ export async function callGoogle(apiKey: string, model: string, request: Orchest
         systemInstruction: { parts: [{ text: request.systemPrompt }] },
         generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(35000),
     }
   );
 
   if (!res.ok) {
     const err = await res.text();
+    console.error(`[IMG-FLUX] [callGoogle] ❌ HTTP ${res.status}: ${err.slice(0, 300)}`);
     throw new Error(`Google ${res.status}: ${err.slice(0, 200)}`);
   }
 
   const data = await res.json();
+
+  // Vérifier si la réponse a été filtrée (safety, recitation)
+  const candidate = data.candidates?.[0];
+  const finishReason = candidate?.finishReason || candidate?.finish_reason;
+  if (finishReason && finishReason !== "STOP" && finishReason !== "stop") {
+    console.warn(`[IMG-FLUX] [callGoogle] ⚠️ Réponse non standard finishReason=${finishReason}`);
+    if (finishReason === "SAFETY" || finishReason === "safety") {
+      console.warn(`[IMG-FLUX] [callGoogle] ⛔ CONTENU FILTRÉ PAR SÉCURITÉ — safetyRatings:`, JSON.stringify(candidate?.safetyRatings));
+      throw new Error(`Gemini: contenu filtré (safety). Modèle: ${model}`);
+    }
+  }
+
+  const replyText = candidate?.content?.parts?.[0]?.text;
+  if (!replyText) {
+    console.warn(`[IMG-FLUX] [callGoogle] ⚠️ Réponse vide — finishReason=${finishReason || "inconnu"}`);
+    throw new Error(`Gemini: réponse vide (finishReason=${finishReason || "none"})`);
+  }
+
+  console.log(`[IMG-FLUX] [callGoogle] ✅ Réponse reçue (${replyText.length} chars)`);
   return {
-    reply: data.candidates?.[0]?.content?.parts?.[0]?.text || "Aucune réponse générée.",
+    reply: replyText,
     provider: "google" as const,
     model,
     tokensUsed: {

@@ -197,12 +197,18 @@ export async function POST(
     const behaviorConfig = parseBehaviorConfig(languageRules || null);
     systemPrompt += "\n" + buildBehaviorSystemPrompt(behaviorConfig, brandTone);
 
+    // Détection: image reçue ? (utilisé avant la RAG et le catalogue)
+    const hasImages = attachments && attachments.length > 0;
+    // Si le message n'est qu'un placeholder d'image sans vrai texte
+    const isImageOnly = hasImages && (!messageText.trim() || messageText.trim() === "[Image]" || messageText.trim() === "[Image reçue du client]");
+    const searchQuery = isImageOnly ? "catalogue produits" : messageText;
+
     // RAG context
     let ragContext = "";
     try {
       const similarityThreshold = (settings?.similarity_threshold as number) || 0.65;
       const maxChunks = (settings?.max_chunks as number) || 5;
-      const docs = await searchDocuments(tenantId, messageText, {
+      const docs = await searchDocuments(tenantId, searchQuery, {
         limit: maxChunks,
         minSimilarity: similarityThreshold,
       });
@@ -218,13 +224,19 @@ export async function POST(
     systemPrompt += ragContext;
 
     // Recherche catalogue produits
-    const hasProductIntent = /(?:je\s*veux|vous\s*avez|combien|prix|quel\s*est\s*le\s*prix|trouver|cherche|besoin|produit|article|catégorie|j\s*ai\s*besoin|je\s*cherche|est-ce\s*que\s*vous)/i.test(messageText);
-    const hasImages = attachments && attachments.length > 0;
+    const hasProductIntent = /(?:je\s*veux|vous\s*avez|combien|prix|quel\s*est\s*le\s*prix|trouver|cherche|besoin|produit|article|catégorie|j\s*ai\s*besoin|je\s*cherche|est-ce\s*que\s*vous)/i.test(searchQuery);
     if (hasProductIntent || hasImages) {
       try {
-        const products = await searchProducts(tenantId, messageText, { limit: 5, minSimilarity: 0.2 });
+        const products = await searchProducts(tenantId, searchQuery, { limit: 5, minSimilarity: 0.2 });
         if (products.length > 0) {
           systemPrompt += buildProductContext(products);
+        } else if (hasImages) {
+          systemPrompt += `\n\n## PHOTO REÇUE — AUCUN PRODUIT CORRESPONDANT AUTOMATIQUEMENT
+Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
+- 📦 Si tu RECONNAIS un produit sur la photo → dis "Oui ce produit est disponible !" + prix si tu le connais
+- 🧑 Si c'est un selfie / photo de personne → complimente poliment, puis demande ce que le client cherche
+- ❓ Si c'est autre chose (document, paysage, etc.) → réponds naturellement, puis ramène la conversation vers la vente
+- 💡 Si tu n'es pas sûr du produit exact, demande au client de te décrire ce qu'il cherche`;
         }
       } catch {
         // Product search failed, continue

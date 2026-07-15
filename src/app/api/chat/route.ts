@@ -5,6 +5,7 @@ import type { ProviderConfig, ModelProvider, ModelCapability } from "@/lib/model
 import { buildUnifiedSystemPrompt } from "@/lib/ai/language";
 import { parseBehaviorConfig, buildBehaviorSystemPrompt } from "@/lib/ai/behavior";
 import { searchDocuments } from "@/lib/rag/embedding";
+import { searchProducts, buildProductContext } from "@/lib/api/products/search";
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,6 +69,25 @@ export async function POST(request: NextRequest) {
       }
     } catch {
       // RAG not available, continue without
+    }
+
+    // 5b. Search product catalog on product-related messages or images
+    const hasProductIntent = /(?:je\s*veux|vous\s*avez|combien|prix|quel\s*est\s*le\s*prix|trouver|cherche|besoin|produit|article|catégorie|j\s*ai\s*besoin|je\s*cherche|est-ce\s*que\s*vous)/i.test(message);
+    const hasImages = attachments && attachments.length > 0;
+    if (hasProductIntent || hasImages) {
+      try {
+        const searchQuery = hasImages ? message || (attachments?.[0]?.type === "image" ? "produit sur la photo" : "") : message;
+        const products = await searchProducts(tenantId, searchQuery, { limit: 5, minSimilarity: 0.2 });
+        if (products.length > 0) {
+          systemPrompt += buildProductContext(products);
+        } else if (hasImages) {
+          // Image envoyée mais aucun produit trouvé → aider le client
+          systemPrompt += `\n\nLe client a envoyé une photo. Si tu ne vois pas l'image, ne dis pas "je ne vois pas l'image" ou "malheureusement".
+Dis plutôt que tu as bien reçu la photo et demande-lui poliment de te décrire ce qu'il cherche. Propose de regarder dans le catalogue ou de l'aider à trouver un produit.`;
+        }
+      } catch {
+        // Product search failed, continue
+      }
     }
 
     // 6. No providers configured => fallback

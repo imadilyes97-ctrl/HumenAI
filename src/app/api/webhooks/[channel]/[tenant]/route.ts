@@ -13,6 +13,7 @@ import { searchDocuments } from "@/lib/rag/embedding";
 import { buildUnifiedSystemPrompt } from "@/lib/ai/language";
 import { parseBehaviorConfig, buildBehaviorSystemPrompt } from "@/lib/ai/behavior";
 import { downloadImageFromMetaMessage } from "@/lib/api/media/downloader";
+import { searchProducts, buildProductContext } from "@/lib/api/products/search";
 
 // ---------------------------------------------------------------------------
 // Admin client (bypass RLS)
@@ -215,6 +216,20 @@ export async function POST(
     }
 
     systemPrompt += ragContext;
+
+    // Recherche catalogue produits
+    const hasProductIntent = /(?:je\s*veux|vous\s*avez|combien|prix|quel\s*est\s*le\s*prix|trouver|cherche|besoin|produit|article|catégorie|j\s*ai\s*besoin|je\s*cherche|est-ce\s*que\s*vous)/i.test(messageText);
+    const hasImages = attachments && attachments.length > 0;
+    if (hasProductIntent || hasImages) {
+      try {
+        const products = await searchProducts(tenantId, messageText, { limit: 5, minSimilarity: 0.2 });
+        if (products.length > 0) {
+          systemPrompt += buildProductContext(products);
+        }
+      } catch {
+        // Product search failed, continue
+      }
+    }
 
     // 8. Appeler l'IA
     if (providers && providers.length > 0) {

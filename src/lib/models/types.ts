@@ -58,6 +58,8 @@ export interface AttachmentInfo {
   type: "image" | "audio" | "document";
   url: string;
   mimeType: string;
+  /** Optional base64-encoded data (preferred over url) */
+  data?: string;
 }
 
 // Known models with their capabilities

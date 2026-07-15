@@ -16,9 +16,10 @@ export async function callGoogle(apiKey: string, model: string, request: Orchest
   if (request.attachments) {
     for (const att of request.attachments) {
       if (att.type === "image") {
-        const b64 = await urlToBase64(att.url);
+        // Priorité data (base64 direct depuis download serveur) > téléchargement
+        const b64 = att.data || await urlToBase64(att.url);
         userParts.push({
-          inline_data: { mime_type: att.mimeType, data: b64 },
+          inline_data: { mime_type: att.mimeType || "image/jpeg", data: b64 },
         });
       }
       if (att.type === "audio") {

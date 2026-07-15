@@ -12,6 +12,7 @@ import type { ModelProvider, ModelCapability } from "@/lib/models/types";
 import { searchDocuments } from "@/lib/rag/embedding";
 import { buildUnifiedSystemPrompt } from "@/lib/ai/language";
 import { parseBehaviorConfig, buildBehaviorSystemPrompt } from "@/lib/ai/behavior";
+import { downloadImageFromMetaMessage } from "@/lib/api/media/downloader";
 
 // ---------------------------------------------------------------------------
 // Admin client (bypass RLS)
@@ -105,6 +106,23 @@ export async function POST(
     const tenantId = tenantData.id;
     const channelId = channelData.id;
     const credentials = channelData.credentials as Record<string, string>;
+
+    // 2.5 Télécharger les images Meta côté serveur
+    // Les URLs platform-lookaside.fbsbx.com expirent → on les download + base64 direct
+    if (attachments) {
+      for (const att of attachments) {
+        if (att.type === "image" && !att.url.startsWith("data:")) {
+          const downloaded = await downloadImageFromMetaMessage(att.url, credentials);
+          if (downloaded) {
+            att.data = downloaded.data;
+            att.mimeType = downloaded.mimeType;
+            console.log(`[webhooks/${channel}/${tenant}] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB base64)`);
+          } else {
+            console.warn(`[webhooks/${channel}/${tenant}] ⚠️ Image non téléchargeable, l'IA ne verra pas l'image`);
+          }
+        }
+      }
+    }
 
     // 3. Créer ou récupérer la conversation
     const convId = await getOrCreateConversation(supabase, {
@@ -224,6 +242,7 @@ export async function POST(
             type: a.type,
             url: a.url,
             mimeType: a.mimeType,
+            data: a.data,
           })),
         },
         providerConfigs
@@ -359,7 +378,7 @@ interface ParsedMessage {
   customerName: string | null;
   messageText: string;
   channelType: string;
-  attachments?: { type: "image"; url: string; mimeType: string }[];
+  attachments?: { type: "image"; url: string; mimeType: string; data?: string }[];
 }
 
 function parseMetaMessage(channel: string, body: Record<string, unknown>): ParsedMessage | null {

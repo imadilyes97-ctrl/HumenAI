@@ -61,14 +61,22 @@ async function buildContentBlocks(request: OrchestrationRequest): Promise<Conten
   if (request.attachments) {
     for (const att of request.attachments) {
       if (att.type === "image") {
-        try {
-          const b64 = await urlToBase64(att.url);
+        // Priorité au data (base64 déjà téléchargé) > URL
+        if (att.data) {
           blocks.push({
             type: "image",
-            source: { type: "base64", media_type: att.mimeType || "image/jpeg", data: b64 },
+            source: { type: "base64", media_type: att.mimeType || "image/jpeg", data: att.data },
           });
-        } catch {
-          blocks.push({ type: "text", text: `[Image: ${att.url}]` });
+        } else {
+          try {
+            const b64 = await urlToBase64(att.url);
+            blocks.push({
+              type: "image",
+              source: { type: "base64", media_type: att.mimeType || "image/jpeg", data: b64 },
+            });
+          } catch {
+            blocks.push({ type: "text", text: `📸 Le client a envoyé une photo (URL inaccessible: ${att.url.slice(0, 40)})` });
+          }
         }
       }
       if (att.type === "audio") {
@@ -81,6 +89,7 @@ async function buildContentBlocks(request: OrchestrationRequest): Promise<Conten
 
 async function urlToBase64(url: string): Promise<string> {
   const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
   return buf.toString("base64");
 }

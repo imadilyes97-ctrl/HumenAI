@@ -59,9 +59,13 @@ function buildContentBlocks(request: OrchestrationRequest): ContentBlock[] {
   if (request.attachments) {
     for (const att of request.attachments) {
       if (att.type === "image") {
+        // Priorité data (base64 direct) > URL (évite les problèmes d'expiration Meta)
+        const imageUrl = att.data
+          ? `data:${att.mimeType || "image/jpeg"};base64,${att.data}`
+          : att.url;
         blocks.push({
           type: "image_url",
-          image_url: { url: att.url, detail: "auto" },
+          image_url: { url: imageUrl, detail: "auto" },
         });
       }
       if (att.type === "audio") {

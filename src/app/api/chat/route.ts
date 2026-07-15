@@ -5,6 +5,7 @@ import type { ProviderConfig, ModelProvider, ModelCapability } from "@/lib/model
 import { buildUnifiedSystemPrompt } from "@/lib/ai/language";
 import { parseBehaviorConfig, buildBehaviorSystemPrompt } from "@/lib/ai/behavior";
 import { searchDocuments } from "@/lib/rag/embedding";
+import { downloadMetaImage } from "@/lib/api/media/downloader";
 import { searchProducts, buildProductContext } from "@/lib/api/products/search";
 
 export async function POST(request: NextRequest) {
@@ -121,14 +122,33 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
       createdAt: p.created_at,
     } satisfies Partial<ProviderConfig>));
 
-    // 8b. Fallback si image envoyée mais pas visible
-    const hasDataImage = attachments?.some((a: {type: string; data?: string}) => a.type === "image" && a.data);
-    if (hasImages && !hasDataImage) {
-      systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir (échec technique).\n- Ne décris PAS l'image — tu ne la vois pas\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente\n- N'invente RIEN sur l'image";
+    // 8b. TÉLÉCHARGER les images depuis leurs URLs (Cloudinary, etc.)
+    // Le widget web envoie les URLs Cloudinary → on les télécharge en base64 côté serveur
+    if (attachments && attachments.length > 0) {
+      for (const att of attachments) {
+        if (att.type === "image" && !att.data && att.url && !att.url.startsWith("data:")) {
+          console.log(`[chat] Téléchargement image: ${att.url.slice(0, 60)}...`);
+          const downloaded = await downloadMetaImage(att.url);
+          if (downloaded) {
+            att.data = downloaded.data;
+            att.mimeType = downloaded.mimeType;
+            console.log(`[chat] Image téléchargée ✅ (${(downloaded.data.length / 1024).toFixed(1)} KB)`);
+          } else {
+            console.warn(`[chat] ⚠️ Échec téléchargement: ${att.url.slice(0, 60)}`);
+          }
+        }
+      }
     }
 
-    // 8c. Fallback si provider ne supporte pas la vision (DeepSeek, Mistral...)
-    // MAIS: vérifier si le fallback Gemini intégré peut prendre le relais
+    // 8c. Fallback si image envoyée mais pas visible (même après tentative de téléchargement)
+    const hasDataImage = attachments?.some((a: {type: string; data?: string}) => a.type === "image" && a.data);
+    if (hasImages && !hasDataImage) {
+      systemPrompt += "\n\n## NOTE TECHNIQUE — IMAGE NON ACCESSIBLE\n⚠️ Le client a envoyé une photo mais tu ne peux PAS la voir (échec technique de téléchargement).\n- Ne décris PAS l'image — tu ne la vois pas\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je n'arrive pas à la visualiser. Pouvez-vous me décrire ce que c'est ?\"\n- Relance sur la vente\n- N'invente RIEN sur l'image";
+    }
+
+    // 8e. Fallback si provider ne supporte pas la vision (DeepSeek, Mistral...)
+    // L'orchestrateur a déjà son propre fallback Gemini intégré — ce prompt n'est
+    // injecté QUE si même le fallback Gemini n'est pas disponible
     const hasVisionProvider = providers?.some((p: { capabilities: string[] }) =>
       p.capabilities?.includes("vision")
     );
@@ -136,7 +156,7 @@ Le client a envoyé une photo. Utilise TA VISION pour l'analyser :
     const visionEffectivementDisponible = hasVisionProvider || hasBuiltinGeminiFallback;
 
     if (hasImages && hasDataImage && !visionEffectivementDisponible) {
-      systemPrompt += "\n\n## NOTE TECHNIQUE — PROVIDER SANS VISION\n⚠️ L'image a bien été téléchargée mais ton modèle IA actuel ne supporte PAS la vision.\n- Tu ne PEUX PAS voir l'image\n- Ne décris PAS l'image, n'invente RIEN sur son contenu\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je ne peux pas analyser les images actuellement.\"\n- Relance naturellement sur la vente";
+      systemPrompt += "\n\n## NOTE TECHNIQUE — PROVIDER SANS VISION\n⚠️ L'image a bien été téléchargée mais ton modèle IA actuel ne supporte PAS la vision.\n- Tu ne PEUX PAS voir l'image\n- Ne décris PAS l'image, n'invente RIEN sur son contenu\n- Dis honnêtement : \"J'ai bien reçu votre photo mais je ne peux pas analyser les images actuellement. Pouvez-vous me décrire ce que c'est ?\"\n- Relance naturellement sur la vente";
     }
 
     // 9. Call orchestrator
